@@ -1,0 +1,3 @@
+# Archivos que la IA tiene prohibido leer o modificar
+.env
+.env.*

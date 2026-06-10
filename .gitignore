@@ -1,0 +1,28 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Variables de entorno (¡CLAVES SECRETAS!)
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Directorios de storage generados localmente
+storage/videos/
+storage/audio/
+storage/media/
+
+# Base de datos local (si se usa SQLite en el futuro)
+*.db
+*.sqlite3
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
