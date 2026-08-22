@@ -69,9 +69,9 @@ async def verify_webhook(
 
 # ─── 2. Lógica de Respuesta Asíncrona (Background Task) ───────────────────────
 
-async def process_instagram_comment(comment_text: str, comment_id: str):
+async def process_instagram_comment(comment_text: str, comment_id: str, media_id: str):
     """
-    Procesa el comentario, busca coincidencia en DB y envía el DM con el affiliate link.
+    Procesa el comentario, busca coincidencia en DB por ig_media_id y envía el DM con el affiliate link.
     Corre en background para no bloquear el retorno HTTP 200 a Meta.
     """
     if not META_ACCESS_TOKEN or not INSTAGRAM_ACCOUNT_ID:
@@ -90,12 +90,16 @@ async def process_instagram_comment(comment_text: str, comment_id: str):
     # 2. Consultar base de datos
     db: Session = SessionLocal()
     try:
-        # Buscar el Video que tenga esa palabra clave (cta_keyword)
-        # Cada video tiene su propia cta_keyword en su idioma nativo
-        video = db.query(Video).filter(Video.cta_keyword == clean_text).first()
+        # Buscar el Video por ig_media_id
+        video = db.query(Video).filter(Video.ig_media_id == media_id).first()
         
         if not video:
-            logger.info(f"[Webhook] No hay coincidencia en DB para la palabra: {clean_text}")
+            logger.info(f"[Webhook] No hay video registrado para media_id: {media_id}")
+            return
+            
+        # Verificar que el comentario contenga la palabra clave correcta
+        if clean_text not in video.cta_keyword.upper():
+            logger.info(f"[Webhook] Comentario '{clean_text}' no matchea la keyword '{video.cta_keyword}' del video {video.id}")
             return
             
         product = video.product
@@ -182,10 +186,11 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
                     value = change.get("value", {})
                     comment_text = value.get("text", "")
                     comment_id = value.get("id", "")
+                    media_id = value.get("media", {}).get("id", "")
                     
-                    if comment_text and comment_id:
+                    if comment_text and comment_id and media_id:
                         # Delegamos el proceso lento a background para devolver 200 OK urgente
-                        background_tasks.add_task(process_instagram_comment, comment_text, comment_id)
+                        background_tasks.add_task(process_instagram_comment, comment_text, comment_id, media_id)
                         
     # Meta EXIGE que devuelvas 200 OK rápido (en menos de 20s), 
     # de lo contrario asume que falló y reintenta varias veces.

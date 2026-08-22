@@ -59,6 +59,9 @@ class Video(Base):
     stock_videos_paths = Column(Text, nullable=True) # JSON string of paths
     final_video_path = Column(String, nullable=True)
     
+    # Meta Graph API Integration
+    ig_media_id = Column(String, nullable=True)
+    
     status = Column(Enum(ContentStatus), default=ContentStatus.PENDING)
     
     created_at = Column(DateTime, default=datetime.utcnow)
