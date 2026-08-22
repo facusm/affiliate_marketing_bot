@@ -11,6 +11,8 @@
 affiliate_marketing_bot/
 ├── .env                          # Variables de entorno (API keys, DB, config)
 ├── .gitignore
+├── Dockerfile                    # Docker build para la API y UI
+├── docker-compose.yml            # Orquestación de servicios (api, ui, db)
 ├── README.md
 ├── requirements.txt              # Dependencias del proyecto
 ├── ui.py                         # Panel de control web (Streamlit)
@@ -29,6 +31,7 @@ affiliate_marketing_bot/
 │   │   ├── pipeline.py           # POST /pipeline/run — Endpoint principal (multipart/form-data)
 │   │   ├── products.py           # CRUD de productos + gestión de affiliate links
 │   │   ├── llm.py                # POST /llm/generate-script/{id} — Generación de guion
+│   │   ├── publish.py            # POST /publish/{id} — Publicación en Instagram (Meta Graph API)
 │   │   └── webhook.py            # GET+POST /webhook — Webhook de Instagram (Meta Graph API)
 │   │
 │   ├── database/                 # Capa de persistencia
@@ -127,6 +130,7 @@ class ContentStatus(enum.Enum):
 | `audio_path`         | `String`                  | nullable                | Ruta local al archivo de audio TTS (.mp3)                |
 | `stock_videos_paths` | `Text`                    | nullable                | JSON string con rutas a clips de video                   |
 | `final_video_path`   | `String`                  | nullable                | Ruta al video final renderizado (.mp4)                   |
+| `ig_media_id`        | `String`                  | nullable                | ID de Instagram devuelto al publicar el Reel             |
 | `status`             | `Enum(ContentStatus)`     | default=`PENDING`       | Estado del procesamiento de este video                   |
 | `created_at`         | `DateTime`                | default=`utcnow`        | Fecha de creación                                        |
 | `updated_at`         | `DateTime`                | default=`utcnow`, onupdate | Última actualización                                  |
@@ -446,6 +450,7 @@ Generados internamente por `_chars_to_word_timestamps()` a partir de la alineaci
 | `META_VERIFY_TOKEN`      | ❌***     | Token de verificación del webhook de Instagram                 |
 | `META_ACCESS_TOKEN`      | ❌***     | Access Token de Meta Graph API (long-lived)                    |
 | `INSTAGRAM_ACCOUNT_ID`   | ❌***     | ID de la cuenta de Instagram Business                          |
+| `PUBLIC_BASE_URL`        | ❌***     | URL pública base (ej: `http://ip-del-vps:8000`) para Meta      |
 
 > `*` Solo necesario si `engine=pexels`.  
 > `**` Solo necesario si `AI_VIDEO_PROVIDER=kling` (o default).  
