@@ -21,7 +21,6 @@ import logging
 import base64
 import httpx
 import time
-import jwt
 from enum import Enum
 from dotenv import load_dotenv
 
@@ -31,8 +30,7 @@ logger = logging.getLogger(__name__)
 # ─── Configuración ────────────────────────────────────────────────────────────
 
 AI_VIDEO_PROVIDER = os.getenv("AI_VIDEO_PROVIDER", "kling").lower()
-KLING_ACCESS_KEY = os.getenv("KLING_ACCESS_KEY", "")
-KLING_SECRET_KEY = os.getenv("KLING_SECRET_KEY", "")
+KLING_API_KEY = os.getenv("KLING_API_KEY", "")
 
 STORAGE_VIDEO_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../storage/videos")
@@ -343,35 +341,22 @@ async def _generate_runway(
 
 # ─── Kling AI ────────────────────────────────────────────────────────────────
 
-def _generate_kling_token() -> str:
-    """Genera un JWT válido por 30 mins usando AK y SK de Kling."""
-    if not KLING_ACCESS_KEY or not KLING_SECRET_KEY:
-        logger.error("[Kling] Faltan KLING_ACCESS_KEY o KLING_SECRET_KEY en .env")
-        return ""
-    
-    headers = {"alg": "HS256", "typ": "JWT"}
-    payload = {
-        "iss": KLING_ACCESS_KEY,
-        "exp": int(time.time()) + 1800,
-        "nbf": int(time.time()) - 5
-    }
-    return jwt.encode(payload, KLING_SECRET_KEY, headers=headers)
-
-
 async def _generate_kling(
     prompt: str, video_id: int, clip_index: int,
     image_url: str | None, aspect_ratio: str, duration: float,
 ) -> str:
     """
-    Genera video con Kling AI API usando JWT Auth.
+    Genera video con Kling AI API usando API Key Auth (Bearer token).
     Usa image-to-video si se provee image_url (la foto real del producto).
     Docs: https://docs.qingque.cn/d/home/eZQBMqNmerEIbJ_GBwojkGqtl
     """
     output_path = _get_output_path(video_id, clip_index)
-    token = _generate_kling_token()
+    
+    if not KLING_API_KEY:
+        logger.error("[Kling] Falta KLING_API_KEY en .env")
 
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {KLING_API_KEY}",
         "Content-Type": "application/json",
     }
 

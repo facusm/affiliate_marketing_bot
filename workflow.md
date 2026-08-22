@@ -337,7 +337,7 @@ flowchart LR
     B -->|"luma"| E["_generate_luma()"]
     B -->|"replicate"| F["_generate_replicate()"]
     
-    C --> G["JWT Auth (HS256)"]
+    C --> G["API Key Auth (Bearer)"]
     G --> H{"image_url?"}
     H -->|"sí"| I["POST /v1/videos/image2video (kling-v3.0)"]
     H -->|"no"| J["POST /v1/videos/text2video (kling-v1-6)"]
@@ -351,10 +351,10 @@ flowchart LR
 2. **Polling** → GET status cada 10s (max 300s) hasta `succeeded`/`failed`
 3. **Download** → GET streaming del video → guardar en disco
 
-**Auth de Kling:** JWT generado con `PyJWT`, payload `{iss: access_key, exp: +30min, nbf: now-5s}`, firmado con `HS256` usando `KLING_SECRET_KEY`.
+**Auth de Kling:** API Key enviada en el header Authorization como Bearer token.
 
 > [!IMPORTANT]
-> Los providers Runway, Luma y Replicate están implementados pero **referencian una variable `AI_VIDEO_API_KEY`** que **no existe** en el código ni en `.env`. Solo Kling tiene sus claves correctamente configuradas (`KLING_ACCESS_KEY`, `KLING_SECRET_KEY`).
+> Los providers Runway, Luma y Replicate están implementados pero **referencian una variable `AI_VIDEO_API_KEY`** que **no existe** en el código ni en `.env`. Solo Kling tiene sus claves correctamente configuradas (`KLING_API_KEY`).
 
 ### 4.5 Detalle del LLM (OpenAI)
 
@@ -442,8 +442,7 @@ Generados internamente por `_chars_to_word_timestamps()` a partir de la alineaci
 | `PEXELS_API_KEY`         | ❌        | Obsoleto                                                       |
 | `DATABASE_URL`           | ✅        | Connection string PostgreSQL (`postgresql://user:pass@host/db`) |
 | `AI_VIDEO_PROVIDER`      | ❌        | Provider de video IA (default: `kling`)                        |
-| `KLING_ACCESS_KEY`       | ✅**      | Access Key de Kling API                                        |
-| `KLING_SECRET_KEY`       | ✅**      | Secret Key de Kling API (para JWT)                             |
+| `KLING_API_KEY`          | ✅**      | API Key estándar de Kling                                      |
 | `META_VERIFY_TOKEN`      | ❌***     | Token de verificación del webhook de Instagram                 |
 | `META_ACCESS_TOKEN`      | ❌***     | Access Token de Meta Graph API (long-lived)                    |
 | `INSTAGRAM_ACCOUNT_ID`   | ❌***     | ID de la cuenta de Instagram Business                          |
@@ -468,7 +467,6 @@ moviepy>=2.0.0          # Post-producción de video
 openai>=1.3.0           # Cliente OpenAI (async, Structured Outputs)
 python-dotenv>=1.0.0    # Carga de .env
 httpx>=0.25.0           # Cliente HTTP async (TTS, Kling)
-PyJWT>=2.0.0            # Generación de JWT para Kling API
 python-multipart>=0.0.6 # Procesamiento multipart/form-data y upload
 streamlit>=1.28.0       # Panel de control web
 ```
