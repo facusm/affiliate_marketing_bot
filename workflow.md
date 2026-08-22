@@ -19,7 +19,6 @@ affiliate_marketing_bot/
 ├── migrate_db.py                 # Script manual de migración SQL (ALTER TABLE)
 ├── check_voices.py               # Script utilitario para verificar voces ElevenLabs
 ├── test_debug.py                 # Script de debug/testing
-├── modificar_meta_webhook.md     # Documentación sobre configuración de webhook de Meta
 │
 ├── app/
 │   ├── __init__.py
