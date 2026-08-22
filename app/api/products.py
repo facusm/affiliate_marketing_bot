@@ -43,6 +43,7 @@ async def list_products(db: Session = Depends(get_db)):
                 "id": p.id,
                 "title": p.title,
                 "price": p.price,
+                "features": p.features,
                 "image_url": p.image_url,
                 "source_url": p.url,
                 "affiliate_url": p.affiliate_url,

@@ -237,6 +237,8 @@ with tab2:
             else:
                 for p in products:
                     with st.expander(f"🛒 {p['title']} (ID: {p['id']}) - Estado: {p['status']}"):
+                        if p.get('features'):
+                            st.caption(f"📝 {p['features']}")
                         st.write(f"**Videos generados:** {p.get('videos_count', 0)}")
                         
                         with st.form(f"update_aff_{p['id']}"):
