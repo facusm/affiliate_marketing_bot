@@ -22,7 +22,7 @@ El sistema incluye un panel de control interactivo en `ui.py`.
 La arquitectura está dockerizada para su rápido despliegue en un VPS (ej. DigitalOcean):
 - **`docker-compose.yml`**: Levanta de manera orquestada la Base de Datos (PostgreSQL 15), la API (FastAPI) y la UI (Streamlit).
 - **Publicación Automática**: El backend cuenta con un endpoint (`POST /publish/{id}`) que se comunica con la Meta Graph API para subir y publicar los Reels generados automáticamente.
-- **Enrutamiento Inteligente**: El webhook fue optimizado para rutear los comentarios usando el `ig_media_id` proveído por Meta tras la publicación, asociando las interacciones al Reel exacto.
+- **Enrutamiento Inteligente Multi-Cuenta**: El webhook fue optimizado para rutear los comentarios usando el `ig_media_id` proveído por Meta tras la publicación, asociando las interacciones al Reel exacto. Además, soporta **6 cuentas de Instagram distintas** (una por idioma), utilizando un único token y respondiendo de forma dinámica desde la cuenta correcta.
 
 ## 🌍 Arquitectura Multi-Idioma (Eficiencia de Costos)
 Para maximizar el alcance global minimizando el gasto en APIs:
