@@ -18,6 +18,7 @@ Usa asyncio para paralelizar la generación de múltiples clips.
 import os
 import asyncio
 import logging
+import base64
 import httpx
 import time
 import jwt
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Configuración ────────────────────────────────────────────────────────────
 
-AI_VIDEO_PROVIDER = os.getenv("AI_VIDEO_PROVIDER", "runway").lower()
+AI_VIDEO_PROVIDER = os.getenv("AI_VIDEO_PROVIDER", "kling").lower()
 KLING_ACCESS_KEY = os.getenv("KLING_ACCESS_KEY", "")
 KLING_SECRET_KEY = os.getenv("KLING_SECRET_KEY", "")
 
@@ -146,6 +147,38 @@ async def generate_ai_video_batch(
 
 
 # ─── Helpers Comunes ──────────────────────────────────────────────────────────
+
+def _resolve_image_ref(image_ref: str | None) -> str | None:
+    """
+    Resuelve la referencia de imagen para APIs de video IA.
+    Si es una URL (http/https), la retorna tal cual.
+    Si es una ruta local, la convierte a base64 string para la API.
+    """
+    if not image_ref:
+        return None
+
+    if image_ref.startswith(("http://", "https://")):
+        return image_ref
+
+    # Ruta local → leer y convertir a base64
+    if os.path.isfile(image_ref):
+        with open(image_ref, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode()
+        ext = os.path.splitext(image_ref)[1].lower()
+        mime_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+        }
+        mime = mime_map.get(ext, "image/png")
+        logger.info(f"[AI Video] Imagen local convertida a base64 ({len(data)} bytes)")
+        return f"data:{mime};base64,{b64}"
+
+    logger.warning(f"[AI Video] Referencia de imagen no resuelta: {image_ref}")
+    return image_ref
+
 
 def _get_output_path(video_id: int, clip_index: int) -> str:
     """Genera la ruta de salida para un clip de video IA."""
@@ -342,19 +375,22 @@ async def _generate_kling(
         "Content-Type": "application/json",
     }
 
+    # Resolver la imagen (URL o ruta local → base64)
+    resolved_image = _resolve_image_ref(image_url)
+
     # Decidir entre image-to-video o text-to-video
-    if image_url:
+    if resolved_image:
         # IMAGE-TO-VIDEO: usa la foto real del producto como referencia
         endpoint = "https://api.klingai.com/v1/videos/image2video"
         payload = {
-            "model_name": "kling-v2-master",
+            "model_name": "kling-v3.0",
             "mode": "std",
-            "image": image_url,
+            "image": resolved_image,
             "prompt": prompt,
             "aspect_ratio": aspect_ratio,
             "duration": str(int(duration)),
         }
-        logger.info(f"[Kling] Usando image-to-video con foto del producto (Modelo V2-Master)")
+        logger.info(f"[Kling] Usando image-to-video con foto del producto (Modelo V3.0 Estándar)")
     else:
         # TEXT-TO-VIDEO: genera producto genérico desde el prompt
         endpoint = "https://api.klingai.com/v1/videos/text2video"

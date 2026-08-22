@@ -1,44 +1,27 @@
 """
-Orchestrator — Factory Pattern para selección de pipeline.
+Orchestrator — Pipeline de generación de video IA multi-idioma.
 
-Punto central que ejecuta el pipeline completo según el engine:
-  - engine="pexels" → Pipeline A (flujo actual intacto)
-  - engine="ai"     → Pipeline B (1 video Kling mudo → N reels multi-idioma)
-
-Ambos pipelines comparten:
-  - Scraper de MercadoLibre (datos del producto)
-
-Pipeline A:
-  - LLM Script Generator (guion single-language)
-  - ElevenLabs TTS (voz en off)
-  - Videos de stock de Pexels + Renderer básico
-
-Pipeline B:
-  - LLM genera prompt de video hipnótico (ai_prompt_engineer)
-  - Kling API genera 1 video mudo (image-to-video, siempre con foto del producto)
-  - LLM genera guiones en N idiomas en una sola llamada
-  - ElevenLabs TTS genera audio con timestamps × N idiomas (voces nativas)
-  - Viral renderer compone N reels finales (video mudo + audio por idioma)
+Punto central que ejecuta el pipeline completo:
+  1. LLM genera prompt de video hipnótico (ai_prompt_engineer)
+  2. Kling API genera 1 video mudo (image-to-video, siempre con foto del producto)
+  3. LLM genera guiones en N idiomas en una sola llamada
+  4. Para cada idioma (en paralelo, con sesiones DB independientes):
+     a. ElevenLabs TTS genera audio CON timestamps (voz nativa del idioma)
+     b. Viral renderer compone el Reel final (video mudo + audio + subtítulos)
+     c. Se persiste el resultado en la DB
 """
 
 import json
 import logging
 import asyncio
-from sqlalchemy.orm import Session
 
 from app.database.models import Product, Video, ContentStatus
+from app.database.database import SessionLocal
 from app.llm.script_generator import (
-    generate_video_script,
     generate_multilang_scripts,
     DEFAULT_LANGUAGES,
     LANGUAGE_MAP,
 )
-
-# Pipeline A imports (existente)
-from app.media.media_manager import process_media_for_video
-from app.render.video_renderer import render_final_video
-
-# Pipeline B imports (nuevo)
 from app.ai_engine.ai_prompt_engineer import generate_video_prompt
 from app.ai_engine.ai_video_generator import generate_ai_video_batch
 from app.utils.elevenlabs import generate_tts_with_timestamps, resolve_voice_for_language
@@ -49,25 +32,19 @@ logger = logging.getLogger(__name__)
 
 async def run_pipeline(
     product_id: int,
-    engine: str,
-    db: Session,
-    strategy: str = "problem_first",
-    language: str = "Spanish (LATAM)",
+    db,
     languages: list[str] | None = None,
 ) -> dict:
     """
-    Ejecuta el pipeline completo de generación de video.
+    Ejecuta el pipeline completo de generación de video IA multi-idioma.
 
     Args:
         product_id: ID del producto en la base de datos.
-        engine: Motor a usar ("pexels" para Pipeline A, "ai" para Pipeline B).
-        db: Sesión de SQLAlchemy.
-        strategy: Estrategia para Pipeline A (ignorada en Pipeline B).
-        language: Idioma para Pipeline A (single-language).
-        languages: Lista de códigos de idioma para Pipeline B multi-idioma.
+        db: Sesión de SQLAlchemy (solo lectura del producto).
+        languages: Lista de códigos de idioma (default: es, en, pt, de, fr, it).
 
     Returns:
-        Dict con el resultado del pipeline, incluyendo video_id(s) y paths.
+        Dict con el resultado del pipeline, incluyendo video_ids y paths.
     """
     # ── 1. Validar Producto ───────────────────────────────────────────────────
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -75,217 +52,142 @@ async def run_pipeline(
         raise ValueError(f"Producto con ID {product_id} no encontrado.")
 
     logger.info(
-        f"[Orchestrator] Iniciando pipeline '{engine}' para producto {product_id}: "
+        f"[Orchestrator] Iniciando pipeline para producto {product_id}: "
         f"{product.title}"
     )
 
-    # ── 2. Ejecutar el Pipeline según el Engine ───────────────────────────────
-    try:
-        if engine == "pexels":
-            # Pipeline A: single-language (flujo original intacto)
-            script_data = await generate_video_script(
-                title=product.title or "Producto genérico",
-                price=product.price or 0.0,
-                features=product.features or "Excelente producto.",
-                rating=product.rating,
-                reviews_count=product.reviews_count,
-                language=language,
-            )
+    # Capturar datos del producto como valores simples para evitar
+    # problemas de sesión cuando se usen en tareas paralelas.
+    product_data = {
+        "id": product.id,
+        "title": product.title or "Producto genérico",
+        "features": product.features or "Excelente producto.",
+        "image_url": product.image_url,
+        "price": product.price,
+        "rating": product.rating,
+        "reviews_count": product.reviews_count,
+    }
 
+    # ── 2. Ejecutar Pipeline AI Multi-Idioma ──────────────────────────────────
+    try:
+        result = await _run_pipeline_ai(
+            product_data=product_data,
+            languages=languages or DEFAULT_LANGUAGES,
+        )
+        return result
+
+    except Exception as e:
+        logger.error(f"[Orchestrator] Error en pipeline: {e}")
+        raise
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PIPELINE AI VIDEO MULTI-IDIOMA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _run_pipeline_ai(
+    product_data: dict,
+    languages: list[str],
+) -> dict:
+    """
+    Pipeline: 1 video mudo de Kling → N reels finales multi-idioma.
+
+    Flujo:
+      1. LLM genera prompt hipnótico de video (ai_prompt_engineer)
+      2. Kling API genera 1 video mudo (image-to-video)           ┐
+      3. LLM genera guiones en N idiomas en una sola llamada      ┘ en paralelo
+      4. Para cada idioma (en paralelo, sesiones DB independientes):
+         a. ElevenLabs TTS genera audio CON timestamps (voz nativa)
+         b. Viral renderer compone el Reel final
+         c. Se crea un registro Video en la DB
+
+    Cada tarea de idioma instancia su propia SessionLocal()
+    para evitar race conditions en escrituras concurrentes.
+    """
+    product_id = product_data["id"]
+
+    # ── Paso 1: Generar Prompt de Video Hipnótico ─────────────────────────────
+    logger.info(f"[Pipeline] Generando prompt de video IA para producto {product_id}")
+
+    ai_prompt = await generate_video_prompt(
+        product_title=product_data["title"],
+        product_features=product_data["features"],
+        image_url=product_data["image_url"],
+        price=product_data["price"],
+        num_clips=2,
+        strategy="product_first",
+    )
+
+    logger.info(f"[Pipeline] Prompt generado: {ai_prompt.scene_description}")
+
+    # ── Paso 2 + 3: Generar Video IA + Guiones Multi-Idioma en Paralelo ──────
+    clip_prompts = ai_prompt.clip_prompts if ai_prompt.clip_prompts else [ai_prompt.video_prompt]
+
+    logger.info(
+        f"[Pipeline] Lanzando {len(clip_prompts)} clips IA + guiones multi-idioma "
+        f"({len(languages)} idiomas) en paralelo..."
+    )
+
+    video_task = generate_ai_video_batch(
+        prompts=clip_prompts,
+        video_id=product_id,
+        image_url=product_data["image_url"],
+        aspect_ratio="9:16",
+        duration=ai_prompt.suggested_duration,
+    )
+
+    scripts_task = generate_multilang_scripts(
+        title=product_data["title"],
+        price=product_data["price"] or 0.0,
+        features=product_data["features"],
+        rating=product_data["rating"],
+        reviews_count=product_data["reviews_count"],
+        languages=languages,
+    )
+
+    ai_clips_paths, lang_scripts = await asyncio.gather(video_task, scripts_task)
+
+    logger.info(
+        f"[Pipeline] Video IA generado ({len(ai_clips_paths)} clips) + "
+        f"{len(lang_scripts)} guiones multi-idioma listos"
+    )
+
+    # ── Paso 4: Para cada idioma → TTS + Render + DB (en paralelo) ────────────
+
+    async def _process_language(lang_script) -> dict:
+        """
+        Procesa un idioma completo: crea Video en DB → TTS → Render.
+        Usa su propia sesión de DB para evitar race conditions.
+        """
+        lang_code = lang_script.language_code
+        lang_name = LANGUAGE_MAP.get(lang_code, lang_code)
+
+        # ── Sesión de DB independiente para esta tarea ────────────────────
+        db = SessionLocal()
+        video = None
+        try:
+            # Crear registro Video para este idioma
             video = Video(
-                product_id=product.id,
-                hook=script_data.hook,
-                script=script_data.body,
-                call_to_action=script_data.cta,
-                cta_keyword=script_data.cta_keyword,
-                keywords=json.dumps(script_data.keywords),
-                engine=engine,
-                language="es",
+                product_id=product_id,
+                hook=lang_script.hook,
+                script=lang_script.body,
+                call_to_action=lang_script.cta,
+                cta_keyword=lang_script.cta_keyword,
+                keywords=json.dumps(lang_script.keywords),
+                engine="ai",
+                language=lang_code,
+                ai_video_prompt=ai_prompt.video_prompt,
+                base_video_path=json.dumps(ai_clips_paths),
+                stock_videos_paths=json.dumps(ai_clips_paths),
                 status=ContentStatus.SCRIPT_GENERATED,
             )
             db.add(video)
             db.commit()
             db.refresh(video)
 
-            result = await _run_pipeline_pexels(product, video, script_data, db)
+            logger.info(f"[Pipeline/{lang_code}] Video {video.id} creado para {lang_name}")
 
-        elif engine == "ai":
-            # Pipeline B: multi-idioma (1 video Kling → N reels)
-            result = await _run_pipeline_ai(
-                product=product,
-                db=db,
-                languages=languages or DEFAULT_LANGUAGES,
-            )
-
-        else:
-            raise ValueError(f"Engine no soportado: {engine}. Usa 'pexels' o 'ai'.")
-
-        return result
-
-    except Exception as e:
-        logger.error(f"[Orchestrator] Error en pipeline '{engine}': {e}")
-        raise
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PIPELINE A — PEXELS (Flujo existente, sin modificaciones)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def _run_pipeline_pexels(
-    product: Product,
-    video: Video,
-    script_data,
-    db: Session,
-) -> dict:
-    """
-    Pipeline A: Usa videos de stock de Pexels + renderer básico.
-    Replica el flujo actual sin modificar los módulos originales.
-    """
-    # Texto completo para TTS
-    full_text = f"{video.hook} {video.script} {video.call_to_action}"
-    keywords = json.loads(video.keywords) if video.keywords else []
-
-    # Generar audio + descargar stock en paralelo
-    audio_path, stock_paths = await process_media_for_video(
-        video_id=video.id,
-        full_text=full_text,
-        keywords=keywords,
-    )
-
-    video.audio_path = audio_path
-    video.stock_videos_paths = json.dumps(stock_paths)
-    video.status = ContentStatus.MEDIA_DOWNLOADED
-    db.commit()
-
-    # Renderizar video final con el renderer original
-    final_path = await render_final_video(
-        video_id=video.id,
-        audio_path=audio_path,
-        stock_paths=stock_paths,
-        hook_text=video.hook or "¡No te pierdas este producto!",
-        cta_keyword=video.cta_keyword,
-        product_image_url=product.image_url,
-    )
-
-    video.final_video_path = final_path
-    video.status = ContentStatus.RENDERED
-    db.commit()
-    db.refresh(video)
-
-    return {
-        "status": "success",
-        "engine": "pexels",
-        "video_id": video.id,
-        "product_id": product.id,
-        "message": "¡Video renderizado con Pipeline A (Pexels)!",
-        "data": {
-            "final_video_path": final_path,
-            "audio_path": audio_path,
-            "stock_videos_count": len(stock_paths),
-        },
-    }
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PIPELINE B — AI VIDEO MULTI-IDIOMA
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def _run_pipeline_ai(
-    product: Product,
-    db: Session,
-    languages: list[str],
-) -> dict:
-    """
-    Pipeline B: 1 video mudo de Kling → N reels finales multi-idioma.
-
-    Flujo:
-      1. LLM genera prompt hipnótico de video (ai_prompt_engineer)
-      2. Kling API genera 1 video mudo (image-to-video, siempre con foto del producto)
-      3. LLM genera guiones en N idiomas en una sola llamada
-      4. Para cada idioma (en paralelo):
-         a. ElevenLabs TTS genera audio CON timestamps (voz nativa del idioma)
-         b. Viral renderer compone el Reel final (video mudo + audio + subtítulos)
-         c. Se crea un registro Video en la DB
-
-    Los pasos 2 y 3 se ejecutan en paralelo con asyncio.gather().
-    """
-    # ── Paso 1: Generar Prompt de Video Hipnótico ─────────────────────────────
-    logger.info(f"[Pipeline B] Generando prompt de video IA para producto {product.id}")
-
-    ai_prompt = await generate_video_prompt(
-        product_title=product.title or "Producto genérico",
-        product_features=product.features or "Excelente producto.",
-        image_url=product.image_url,
-        price=product.price,
-        num_clips=2,
-        strategy="product_first",  # Siempre image-to-video en Pipeline B
-    )
-
-    logger.info(f"[Pipeline B] Prompt generado: {ai_prompt.scene_description}")
-
-    # ── Paso 2 + 3: Generar Video IA + Guiones Multi-Idioma en Paralelo ──────
-    clip_prompts = ai_prompt.clip_prompts if ai_prompt.clip_prompts else [ai_prompt.video_prompt]
-
-    logger.info(
-        f"[Pipeline B] Lanzando {len(clip_prompts)} clips IA + guiones multi-idioma "
-        f"({len(languages)} idiomas) en paralelo..."
-    )
-
-    # Usamos un video_id temporal (0) para Kling; se renombrará después
-    video_task = generate_ai_video_batch(
-        prompts=clip_prompts,
-        video_id=product.id,  # Usar product_id para organizar archivos base
-        image_url=product.image_url,  # SIEMPRE image-to-video
-        aspect_ratio="9:16",
-        duration=ai_prompt.suggested_duration,
-    )
-
-    scripts_task = generate_multilang_scripts(
-        title=product.title or "Producto genérico",
-        price=product.price or 0.0,
-        features=product.features or "Excelente producto.",
-        rating=product.rating,
-        reviews_count=product.reviews_count,
-        languages=languages,
-    )
-
-    # asyncio.gather para máxima paralelización
-    ai_clips_paths, lang_scripts = await asyncio.gather(video_task, scripts_task)
-
-    logger.info(
-        f"[Pipeline B] Video IA generado ({len(ai_clips_paths)} clips) + "
-        f"{len(lang_scripts)} guiones multi-idioma listos"
-    )
-
-    # ── Paso 4: Para cada idioma → TTS + Render + DB (en paralelo) ────────────
-    async def _process_language(lang_script) -> dict:
-        """Procesa un idioma: crea Video en DB → TTS → Render → actualiza DB."""
-        lang_code = lang_script.language_code
-        lang_name = LANGUAGE_MAP.get(lang_code, lang_code)
-
-        # Crear registro Video para este idioma
-        video = Video(
-            product_id=product.id,
-            hook=lang_script.hook,
-            script=lang_script.body,
-            call_to_action=lang_script.cta,
-            cta_keyword=lang_script.cta_keyword,
-            keywords=json.dumps(lang_script.keywords),
-            engine="ai",
-            language=lang_code,
-            ai_video_prompt=ai_prompt.video_prompt,
-            base_video_path=json.dumps(ai_clips_paths),
-            stock_videos_paths=json.dumps(ai_clips_paths),
-            status=ContentStatus.SCRIPT_GENERATED,
-        )
-        db.add(video)
-        db.commit()
-        db.refresh(video)
-
-        logger.info(f"[Pipeline B/{lang_code}] Video {video.id} creado para {lang_name}")
-
-        try:
-            # TTS con voz nativa del idioma
+            # ── TTS con voz nativa del idioma ─────────────────────────────
             full_text = f"{video.hook} {video.script} {video.call_to_action}"
             voice_id = resolve_voice_for_language(lang_code)
 
@@ -300,10 +202,10 @@ async def _run_pipeline_ai(
             db.commit()
 
             logger.info(
-                f"[Pipeline B/{lang_code}] Audio generado: {len(word_timestamps)} palabras"
+                f"[Pipeline/{lang_code}] Audio generado: {len(word_timestamps)} palabras"
             )
 
-            # Renderizar reel viral con video mudo + audio del idioma
+            # ── Renderizar reel viral ─────────────────────────────────────
             final_path = await render_viral_video(
                 video_id=video.id,
                 ai_clips_paths=ai_clips_paths,
@@ -320,7 +222,7 @@ async def _run_pipeline_ai(
             db.commit()
             db.refresh(video)
 
-            logger.info(f"[Pipeline B/{lang_code}] ¡Reel {lang_name} renderizado! → {final_path}")
+            logger.info(f"[Pipeline/{lang_code}] ¡Reel {lang_name} renderizado! → {final_path}")
 
             return {
                 "language": lang_code,
@@ -333,15 +235,22 @@ async def _run_pipeline_ai(
             }
 
         except Exception as e:
-            video.status = ContentStatus.ERROR
-            db.commit()
-            logger.error(f"[Pipeline B/{lang_code}] Error procesando idioma: {e}")
+            db.rollback()
+            if video and video.id:
+                try:
+                    video.status = ContentStatus.ERROR
+                    db.commit()
+                except Exception:
+                    db.rollback()
+            logger.error(f"[Pipeline/{lang_code}] Error procesando idioma: {e}")
             return {
                 "language": lang_code,
                 "language_name": lang_name,
-                "video_id": video.id,
+                "video_id": getattr(video, "id", None),
                 "error": str(e),
             }
+        finally:
+            db.close()
 
     # Ejecutar todos los idiomas en paralelo
     lang_results = await asyncio.gather(
@@ -361,15 +270,15 @@ async def _run_pipeline_ai(
             successful.append(result)
 
     logger.info(
-        f"[Pipeline B] Completado: {len(successful)} reels exitosos, {len(failed)} errores"
+        f"[Pipeline] Completado: {len(successful)} reels exitosos, {len(failed)} errores"
     )
 
     return {
         "status": "success" if successful else "error",
         "engine": "ai",
-        "product_id": product.id,
+        "product_id": product_id,
         "message": (
-            f"¡{len(successful)} reels multi-idioma generados con Pipeline B! "
+            f"¡{len(successful)} reels multi-idioma generados! "
             f"({len(failed)} errores)"
         ),
         "data": {

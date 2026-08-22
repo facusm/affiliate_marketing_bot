@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.database.database import init_db
-from app.api import scraper, llm, media, render, pipeline, webhook, products
+from app.api import llm, pipeline, webhook, products
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -12,19 +12,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Affiliate Marketing Automation API",
-    description="Orchestrator Module for Affiliate Marketing Video Automation — Multi-Language Pipeline",
-    version="3.0.0",
+    description="AI Video Pipeline — Multi-Language Reel Generator",
+    version="4.0.0",
     lifespan=lifespan
 )
 
-# Incluir los routers de cada módulo
-app.include_router(scraper.router)
-app.include_router(llm.router)
-app.include_router(media.router)
-app.include_router(render.router)
+# Incluir los routers activos
 app.include_router(pipeline.router)
-app.include_router(webhook.router)
 app.include_router(products.router)
+app.include_router(llm.router)
+app.include_router(webhook.router)
 
 @app.get("/")
 def health_check():

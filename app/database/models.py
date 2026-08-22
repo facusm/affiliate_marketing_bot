@@ -25,6 +25,7 @@ class Product(Base):
     image_url = Column(String, nullable=True)
     rating = Column(Float, nullable=True)
     reviews_count = Column(Integer, nullable=True)
+    affiliate_url = Column(String, nullable=True)
     status = Column(Enum(ContentStatus), default=ContentStatus.PENDING)
     
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -47,12 +48,14 @@ class Video(Base):
     cta_keyword = Column(String, nullable=True)
     keywords = Column(Text, nullable=True) # JSON string or comma-separated
     
-    # Pipeline Engine ("pexels" = Pipeline A, "ai" = Pipeline B)
-    engine = Column(String, default="pexels")
-    ai_video_prompt = Column(Text, nullable=True)  # Prompt usado para generar video IA (Pipeline B)
+    # Pipeline Engine & Language
+    engine = Column(String, default="ai")
+    language = Column(String, nullable=True)
+    ai_video_prompt = Column(Text, nullable=True)  # Prompt usado para generar video IA
 
     # Media & Render Paths
     audio_path = Column(String, nullable=True)
+    base_video_path = Column(Text, nullable=True)    # JSON string — clips IA base (mudos)
     stock_videos_paths = Column(Text, nullable=True) # JSON string of paths
     final_video_path = Column(String, nullable=True)
     

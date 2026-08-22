@@ -148,6 +148,7 @@ RULES FOR EVERY SCRIPT:
 4. Keywords: 3-5 English keywords for Pexels stock search. MUST be IDENTICAL across all languages.
 
 CRITICAL RULES:
+- REGLA ESTRICTA: NUNCA menciones el precio ni el valor monetario del producto en el guion. Tu objetivo es generar curiosidad destacando el dolor que resuelve y sus beneficios. El CTA debe invitar a comentar la palabra clave única generada para este producto (cta_keyword) para recibir el enlace.
 - NO emojis in text fields (this will be read by ElevenLabs TTS).
 - The cta_keyword MUST be in the NATIVE LANGUAGE of each script and in UPPERCASE. It should be a short, product-related word that feels natural to comment in that language (e.g., Spanish: OFERTA, English: OFFER, German: ANGEBOT, Portuguese: OFERTA, French: OFFRE, Italian: OFFERTA). Each language gets its OWN keyword.
 - Each script must feel NATIVE to its language, not a direct translation. Adapt idioms, tone, and cultural references.
