@@ -27,7 +27,6 @@ router = APIRouter(prefix="/webhook", tags=["Webhook"])
 
 META_VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN", "")
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
-INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
 
 # ─── Templates de DM por Idioma ───────────────────────────────────────────────
 # Cada idioma tiene su propio mensaje de DM adaptado culturalmente.
@@ -69,13 +68,13 @@ async def verify_webhook(
 
 # ─── 2. Lógica de Respuesta Asíncrona (Background Task) ───────────────────────
 
-async def process_instagram_comment(comment_text: str, comment_id: str, media_id: str):
+async def process_instagram_comment(comment_text: str, comment_id: str, media_id: str, ig_account_id: str):
     """
     Procesa el comentario, busca coincidencia en DB por ig_media_id y envía el DM con el affiliate link.
     Corre en background para no bloquear el retorno HTTP 200 a Meta.
     """
-    if not META_ACCESS_TOKEN or not INSTAGRAM_ACCOUNT_ID:
-        logger.error("[Webhook] Faltan variables de entorno de Meta (Token/Account ID).")
+    if not META_ACCESS_TOKEN or not ig_account_id:
+        logger.error("[Webhook] Faltan variables de Meta (Token) o account_id.")
         return
 
     # 1. Limpiar el texto: quitar puntuación y espacios, y pasar a mayúsculas
@@ -128,7 +127,7 @@ async def process_instagram_comment(comment_text: str, comment_id: str, media_id
         dm_message = dm_template.format(url=affiliate_url)
 
         # 5. Enviar Mensaje Directo (DM) vía Meta Graph API respondiendo al comentario
-        url = f"https://graph.facebook.com/v19.0/{INSTAGRAM_ACCOUNT_ID}/messages"
+        url = f"https://graph.facebook.com/v19.0/{ig_account_id}/messages"
         
         headers = {
             "Authorization": f"Bearer {META_ACCESS_TOKEN}",
@@ -179,6 +178,7 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     if body.get("object") == "instagram":
         entries = body.get("entry", [])
         for entry in entries:
+            ig_account_id_entrante = entry.get("id")
             changes = entry.get("changes", [])
             for change in changes:
                 # Nos interesan específicamente los comentarios
@@ -188,9 +188,15 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
                     comment_id = value.get("id", "")
                     media_id = value.get("media", {}).get("id", "")
                     
-                    if comment_text and comment_id and media_id:
+                    if comment_text and comment_id and media_id and ig_account_id_entrante:
                         # Delegamos el proceso lento a background para devolver 200 OK urgente
-                        background_tasks.add_task(process_instagram_comment, comment_text, comment_id, media_id)
+                        background_tasks.add_task(
+                            process_instagram_comment, 
+                            comment_text, 
+                            comment_id, 
+                            media_id, 
+                            ig_account_id_entrante
+                        )
                         
     # Meta EXIGE que devuelvas 200 OK rápido (en menos de 20s), 
     # de lo contrario asume que falló y reintenta varias veces.

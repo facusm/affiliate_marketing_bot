@@ -449,7 +449,12 @@ Generados internamente por `_chars_to_word_timestamps()` a partir de la alineaci
 | `KLING_API_KEY`          | ✅**      | API Key estándar de Kling                                      |
 | `META_VERIFY_TOKEN`      | ❌***     | Token de verificación del webhook de Instagram                 |
 | `META_ACCESS_TOKEN`      | ❌***     | Access Token de Meta Graph API (long-lived)                    |
-| `INSTAGRAM_ACCOUNT_ID`   | ❌***     | ID de la cuenta de Instagram Business                          |
+| `INSTAGRAM_ACCOUNT_ID_ES`| ❌***     | ID de la cuenta de Instagram Business (Español)                |
+| `INSTAGRAM_ACCOUNT_ID_EN`| ❌***     | ID de la cuenta de Instagram Business (Inglés)                 |
+| `INSTAGRAM_ACCOUNT_ID_PT`| ❌***     | ID de la cuenta de Instagram Business (Portugués)              |
+| `INSTAGRAM_ACCOUNT_ID_DE`| ❌***     | ID de la cuenta de Instagram Business (Alemán)                 |
+| `INSTAGRAM_ACCOUNT_ID_FR`| ❌***     | ID de la cuenta de Instagram Business (Francés)                |
+| `INSTAGRAM_ACCOUNT_ID_IT`| ❌***     | ID de la cuenta de Instagram Business (Italiano)               |
 | `PUBLIC_BASE_URL`        | ❌***     | URL pública base (ej: `http://ip-del-vps:8000`) para Meta      |
 
 > `*` Solo necesario si `engine=pexels`.  

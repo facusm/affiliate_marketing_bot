@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/publish", tags=["Publishing"])
 
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
-INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 
 async def _publish_to_instagram(video_id: int, db: Session):
@@ -21,8 +20,11 @@ async def _publish_to_instagram(video_id: int, db: Session):
         logger.error(f"[Publish] Video {video_id} no encontrado o sin renderizar.")
         return
 
-    if not META_ACCESS_TOKEN or not INSTAGRAM_ACCOUNT_ID:
-        logger.error("[Publish] Faltan credenciales de Meta.")
+    lang = video.language.upper() if video.language else "ES"
+    ig_account_id = os.getenv(f"INSTAGRAM_ACCOUNT_ID_{lang}")
+
+    if not META_ACCESS_TOKEN or not ig_account_id:
+        logger.error(f"[Publish] Faltan credenciales de Meta para el idioma {lang}.")
         video.status = ContentStatus.ERROR
         db.commit()
         return
@@ -38,7 +40,7 @@ async def _publish_to_instagram(video_id: int, db: Session):
 
     async with httpx.AsyncClient() as client:
         # 1. Crear contenedor multimedia
-        create_container_url = f"https://graph.facebook.com/v19.0/{INSTAGRAM_ACCOUNT_ID}/media"
+        create_container_url = f"https://graph.facebook.com/v19.0/{ig_account_id}/media"
         caption = f"{video.hook}\n\n{video.body if hasattr(video, 'body') else ''}\n\n{video.call_to_action}\nComenta '{video.cta_keyword}' para recibir el link!\n\n#reels #viral"
         
         payload = {
@@ -77,7 +79,7 @@ async def _publish_to_instagram(video_id: int, db: Session):
                 raise TimeoutError("Timeout esperando que Meta procese el contenedor de video.")
 
             # 2. Publicar el contenedor
-            publish_url = f"https://graph.facebook.com/v19.0/{INSTAGRAM_ACCOUNT_ID}/media_publish"
+            publish_url = f"https://graph.facebook.com/v19.0/{ig_account_id}/media_publish"
             publish_payload = {
                 "creation_id": creation_id
             }
