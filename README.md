@@ -1,7 +1,7 @@
 # 📝 Resumen del Proyecto: Affiliate Marketing Bot (v4.0.0)
 
 ## 🎯 Objetivo Principal
-Un sistema automatizado que transforma la foto y los datos de un producto (ingresados mediante un panel web fácil de usar) en **6 Reels virales en distintos idiomas**. El bot publica los videos y usa un Webhook oficial de Instagram para **enviar mensajes directos (DMs) automáticos** con un link de afiliado a los usuarios que comentan una palabra clave específica.
+Un sistema automatizado que transforma la foto y los datos de un producto (ingresados mediante un panel web fácil de usar) en **6 Reels virales en distintos idiomas**. El bot publica los videos automáticamente usando la Meta Graph API y usa un Webhook oficial de Instagram para **enviar mensajes directos (DMs) automáticos** con un link de afiliado a los usuarios que comentan una palabra clave específica.
 
 ## 🧠 La Receta Viral (El "Efecto Adictivo")
 El sistema no genera videos genéricos; está programado a nivel de código para maximizar la retención del usuario (watch-time) y forzar la interacción:
@@ -14,9 +14,15 @@ El sistema no genera videos genéricos; está programado a nivel de código para
 
 ## 🖥️ Interfaz de Usuario (Streamlit)
 El sistema incluye un panel de control interactivo en `ui.py`.
-- Levantá la interfaz con: `streamlit run ui.py`
+- Levantá la interfaz con: `streamlit run ui.py` (o vía Docker)
 - Cargá el título, características e imagen física del producto desde el navegador.
 - Monitoreá la generación paralela de todos los idiomas directamente en la web.
+
+## 🐳 Despliegue en Producción (Docker VPS)
+La arquitectura está dockerizada para su rápido despliegue en un VPS (ej. DigitalOcean):
+- **`docker-compose.yml`**: Levanta de manera orquestada la Base de Datos (PostgreSQL 15), la API (FastAPI) y la UI (Streamlit).
+- **Publicación Automática**: El backend cuenta con un endpoint (`POST /publish/{id}`) que se comunica con la Meta Graph API para subir y publicar los Reels generados automáticamente.
+- **Enrutamiento Inteligente**: El webhook fue optimizado para rutear los comentarios usando el `ig_media_id` proveído por Meta tras la publicación, asociando las interacciones al Reel exacto.
 
 ## 🌍 Arquitectura Multi-Idioma (Eficiencia de Costos)
 Para maximizar el alcance global minimizando el gasto en APIs:
