@@ -12,10 +12,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Directorios de storage generados localmente
-storage/videos/
-storage/audio/
-storage/media/
+# Directorio de archivos generados localmente
+storage/
 
 # Base de datos local (si se usa SQLite en el futuro)
 *.db
