@@ -25,7 +25,6 @@ class Product(Base):
     image_url = Column(String, nullable=True)
     rating = Column(Float, nullable=True)
     reviews_count = Column(Integer, nullable=True)
-    affiliate_url = Column(String, nullable=True)
     status = Column(Enum(ContentStatus), default=ContentStatus.PENDING)
     
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -61,6 +60,7 @@ class Video(Base):
     
     # Meta Graph API Integration
     ig_media_id = Column(String, nullable=True)
+    affiliate_url = Column(String, nullable=True)
     
     status = Column(Enum(ContentStatus), default=ContentStatus.PENDING)
     

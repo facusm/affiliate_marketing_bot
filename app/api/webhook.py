@@ -7,7 +7,7 @@ Flujo:
   3. Si hay match, se envía un DM con el affiliate_url del producto asociado
   4. El mensaje DM se adapta al idioma del video que matcheó
 
-El affiliate_url viene de Product.affiliate_url (puede agregarse después via PATCH).
+El affiliate_url viene de Video.affiliate_url (puede agregarse después via PATCH o la UI).
 """
 
 import os
@@ -138,13 +138,13 @@ async def process_instagram_comment(comment_text: str, comment_id: str, media_id
             logger.error(f"[Webhook] Video {video.id} encontrado pero sin producto asociado.")
             return
 
-        # 3. Verificar que el producto tenga affiliate_url configurada
-        affiliate_url = product.affiliate_url
+        # 3. Verificar que el video tenga affiliate_url configurada
+        affiliate_url = video.affiliate_url
         if not affiliate_url:
             logger.info(
-                f"[Webhook] Producto '{product.title}' (ID: {product.id}) no tiene "
+                f"[Webhook] Video {video.id} (Producto '{product.title}', ID: {product.id}) no tiene "
                 f"affiliate_url configurada. Ignorando comentario. "
-                f"Usá PATCH /products/{product.id}/affiliate-link para activarlo."
+                f"Usá la UI para actualizar el link del idioma {video.language}."
             )
             return
 

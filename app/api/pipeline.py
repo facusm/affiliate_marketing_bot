@@ -59,10 +59,6 @@ async def execute_pipeline(
         default=None,
         description="Cantidad de reseñas/opiniones (ej: 523)",
     ),
-    affiliate_url: str | None = Form(
-        default=None,
-        description="Link de afiliado (opcional, se puede agregar después via PATCH)",
-    ),
     languages: str = Query(
         default=",".join(DEFAULT_LANGUAGES),
         description=(
@@ -77,7 +73,7 @@ async def execute_pipeline(
 
     - Subí la **foto del producto** como archivo (multipart/form-data).
     - Completá **título**, **precio** y **descripción** como campos de formulario.
-    - El **affiliate_url** es opcional. Podés agregarlo después con:
+    - El **affiliate_url** se agrega después con:
       `PATCH /products/{product_id}/affiliate-link`
 
     El pipeline genera 1 video IA mudo + N reels con subtítulos dinámicos
@@ -111,7 +107,6 @@ async def execute_pipeline(
             image_url=image_path,
             rating=rating,
             reviews_count=reviews_count,
-            affiliate_url=affiliate_url,
             status=ContentStatus.SCRAPED,
         )
         db.add(db_product)

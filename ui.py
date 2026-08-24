@@ -242,16 +242,27 @@ with tab2:
                         st.write(f"**Videos generados:** {p.get('videos_count', 0)}")
                         
                         with st.form(f"update_aff_{p['id']}"):
-                            new_aff = st.text_input("Link de Afiliado", value=p.get("affiliate_url") or "")
-                            if st.form_submit_button("Guardar Link"):
+                            st.write("🔗 **Links de Afiliado por Idioma**")
+                            new_links = {}
+                            if p.get("videos"):
+                                for v in p["videos"]:
+                                    lang = v["language"]
+                                    val = v.get("affiliate_url") or ""
+                                    new_links[lang] = st.text_input(f"Link para {lang.upper()}", value=val, key=f"aff_{p['id']}_{lang}")
+                            else:
+                                st.info("Generá videos primero para cargar los links por idioma.")
+                                
+                            if st.form_submit_button("Guardar Links"):
+                                # Filtrar vacíos
+                                cleaned_links = {k: v.strip() for k, v in new_links.items() if v.strip()}
                                 patch_res = requests.patch(
                                     f"{API_BASE_URL}/products/{p['id']}/affiliate-link",
-                                    json={"affiliate_url": new_aff.strip()}
+                                    json={"links": cleaned_links}
                                 )
                                 if patch_res.status_code == 200:
-                                    st.success("Link actualizado. ¡Recargá la lista para ver los cambios!")
+                                    st.success("Links actualizados. ¡Recargá la lista para ver los cambios!")
                                 else:
-                                    st.error("Error al actualizar el link.")
+                                    st.error("Error al actualizar los links.")
                         
                         if p.get('videos_count', 0) > 0:
                             if st.button("🚀 Publicar Videos en Meta", key=f"pub_{p['id']}"):

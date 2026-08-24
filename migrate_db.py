@@ -36,6 +36,7 @@ with engine.connect() as conn:
         "language": "VARCHAR",
         "ai_video_prompt": "TEXT",
         "base_video_path": "TEXT",
+        "affiliate_url": "VARCHAR",
     }
 
     for col_name, col_type in vid_missing.items():
@@ -45,6 +46,12 @@ with engine.connect() as conn:
             print(f"Added: videos.{col_name}")
         else:
             print(f"OK: videos.{col_name} exists")
+
+    # Drop from products if exists
+    if "affiliate_url" in prod_cols:
+        conn.execute(text("ALTER TABLE products DROP COLUMN affiliate_url"))
+        conn.commit()
+        print("Dropped: products.affiliate_url")
 
     # ── Verificación Final ────────────────────────────────────────────────────
     result = conn.execute(text(

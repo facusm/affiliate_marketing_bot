@@ -111,8 +111,6 @@ class ContentStatus(enum.Enum):
 **Relaciones:**
 - `videos` → `relationship("Video", back_populates="product", cascade="all, delete-orphan")`
 
-*(Nota: El campo `affiliate_url` fue sincronizado correctamente en el ORM en v4.0)*
-
 ### 2.3 Tabla `videos`
 
 | Campo               | Tipo SQLAlchemy           | Constraints / Default  | Descripción                                              |
@@ -130,6 +128,7 @@ class ContentStatus(enum.Enum):
 | `stock_videos_paths` | `Text`                    | nullable                | JSON string con rutas a clips de video                   |
 | `final_video_path`   | `String`                  | nullable                | Ruta al video final renderizado (.mp4)                   |
 | `ig_media_id`        | `String`                  | nullable                | ID de Instagram devuelto al publicar el Reel             |
+| `affiliate_url`      | `String`                  | nullable                | Link de afiliado asociado a este idioma/video            |
 | `status`             | `Enum(ContentStatus)`     | default=`PENDING`       | Estado del procesamiento de este video                   |
 | `created_at`         | `DateTime`                | default=`utcnow`        | Fecha de creación                                        |
 | `updated_at`         | `DateTime`                | default=`utcnow`, onupdate | Última actualización                                  |
@@ -154,7 +153,6 @@ erDiagram
         string image_url
         float rating
         int reviews_count
-        string affiliate_url
         enum status
         datetime created_at
         datetime updated_at
@@ -175,6 +173,7 @@ erDiagram
         string audio_path
         text stock_videos_paths "(JSON)"
         string final_video_path
+        string affiliate_url
         enum status
         datetime created_at
         datetime updated_at
@@ -211,7 +210,6 @@ erDiagram
 | `description` | `str` | `""` | Características y detalles |
 | `rating` | `float` | `null` | Rating en estrellas |
 | `reviews_count`| `int` | `null` | Cantidad de reseñas |
-| `affiliate_url`| `str` | `null` | Link de afiliado opcional |
 
 **Archivo Subido (`File`):**
 - `image`: Archivo físico de la imagen (PNG, JPG, WEBP). Se guarda localmente y se pasa en Base64 a Kling.
@@ -239,13 +237,16 @@ erDiagram
 |----------|-----------------------------------------|---------------------------------------------|--------------------------------------------------|
 | `GET`    | `/products/`                            | —                                           | Lista todos los productos con conteo de videos   |
 | `GET`    | `/products/{product_id}`                | —                                           | Detalle de un producto + lista de videos por idioma |
-| `PATCH`  | `/products/{product_id}/affiliate-link` | `{"affiliate_url": "string"}`               | Agregar/actualizar link de afiliado              |
-| `DELETE` | `/products/{product_id}/affiliate-link` | —                                           | Eliminar link de afiliado                        |
+| `PATCH`  | `/products/{product_id}/affiliate-link` | `{"links": {"es": "..."}}` | Agregar/actualizar link de afiliado por idioma    |
+| `DELETE` | `/products/{product_id}/affiliate-link` | —                                           | Eliminar links de afiliado                        |
 
 **Modelo `AffiliateLinkUpdate`:**
 ```json
 {
-    "affiliate_url": "string (required)"
+    "links": {
+        "es": "https://amazon.es/...",
+        "en": "https://amazon.com/..."
+    }
 }
 ```
 

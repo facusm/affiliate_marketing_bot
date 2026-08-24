@@ -19,9 +19,9 @@ router = APIRouter(prefix="/products", tags=["Products"])
 # ─── Modelos de Request ───────────────────────────────────────────────────────
 
 class AffiliateLinkUpdate(BaseModel):
-    """Body para actualizar el link de afiliado."""
-    affiliate_url: str = Field(
-        description="URL del link de afiliado (ej: 'https://tienda.mercadolibre.com.ar/...?aff=123')"
+    """Body para actualizar los links de afiliado por idioma."""
+    links: dict[str, str] = Field(
+        description="Diccionario de códigos de idioma a URLs (ej: {'es': 'amazon.es/...', 'en': 'amazon.com/...'})"
     )
 
 
@@ -31,29 +31,41 @@ class AffiliateLinkUpdate(BaseModel):
 async def list_products(db: Session = Depends(get_db)):
     """
     Lista todos los productos con indicador de si tienen link de afiliado
-    y la cantidad de videos generados.
+    (si al menos un video tiene link) y la cantidad de videos generados.
     """
     products = db.query(Product).order_by(Product.created_at.desc()).all()
+
+    response_products = []
+    for p in products:
+        videos = p.videos
+        has_affiliate_link = any(v.affiliate_url for v in videos)
+        
+        video_data = [
+            {
+                "language": v.language,
+                "affiliate_url": v.affiliate_url
+            }
+            for v in videos
+        ]
+        
+        response_products.append({
+            "id": p.id,
+            "title": p.title,
+            "price": p.price,
+            "features": p.features,
+            "image_url": p.image_url,
+            "source_url": p.url,
+            "has_affiliate_link": has_affiliate_link,
+            "videos_count": len(videos),
+            "videos": video_data,
+            "status": p.status.value if p.status else None,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        })
 
     return {
         "status": "success",
         "count": len(products),
-        "products": [
-            {
-                "id": p.id,
-                "title": p.title,
-                "price": p.price,
-                "features": p.features,
-                "image_url": p.image_url,
-                "source_url": p.url,
-                "affiliate_url": p.affiliate_url,
-                "has_affiliate_link": bool(p.affiliate_url),
-                "videos_count": len(p.videos),
-                "status": p.status.value if p.status else None,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-            }
-            for p in products
-        ],
+        "products": response_products,
     }
 
 
@@ -61,13 +73,14 @@ async def list_products(db: Session = Depends(get_db)):
 async def get_product(product_id: int, db: Session = Depends(get_db)):
     """
     Detalle de un producto con todos sus videos organizados por idioma.
-    Muestra el estado del link de afiliado y los reels generados.
+    Muestra el estado del link de afiliado por video.
     """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
     videos = db.query(Video).filter(Video.product_id == product_id).all()
+    has_affiliate_link = any(v.affiliate_url for v in videos)
 
     return {
         "status": "success",
@@ -80,8 +93,7 @@ async def get_product(product_id: int, db: Session = Depends(get_db)):
             "rating": product.rating,
             "reviews_count": product.reviews_count,
             "source_url": product.url,
-            "affiliate_url": product.affiliate_url,
-            "has_affiliate_link": bool(product.affiliate_url),
+            "has_affiliate_link": has_affiliate_link,
             "status": product.status.value if product.status else None,
             "created_at": product.created_at.isoformat() if product.created_at else None,
             "updated_at": product.updated_at.isoformat() if product.updated_at else None,
@@ -95,6 +107,7 @@ async def get_product(product_id: int, db: Session = Depends(get_db)):
                 "cta_keyword": v.cta_keyword,
                 "final_video_path": v.final_video_path,
                 "audio_path": v.audio_path,
+                "affiliate_url": v.affiliate_url,
                 "status": v.status.value if v.status else None,
                 "created_at": v.created_at.isoformat() if v.created_at else None,
             }
@@ -111,32 +124,25 @@ async def update_affiliate_link(
     db: Session = Depends(get_db),
 ):
     """
-    Agrega o actualiza el link de afiliado de un producto.
-
-    Esto permite generar videos de prueba primero y agregar el link
-    después de darse de alta en el programa de afiliados.
-
-    El link se usa automáticamente por el webhook para responder
-    comentarios con DMs que contienen el enlace de afiliado.
+    Agrega o actualiza los links de afiliado para los videos de un producto.
     """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-    product.affiliate_url = body.affiliate_url
+    updated_count = 0
+    for video in product.videos:
+        if video.language in body.links:
+            video.affiliate_url = body.links[video.language]
+            updated_count += 1
+            
     db.commit()
-    db.refresh(product)
-
-    # Contar cuántos videos ya tienen este producto
-    videos_count = db.query(Video).filter(Video.product_id == product_id).count()
 
     return {
         "status": "success",
-        "message": f"Link de afiliado actualizado para '{product.title}'.",
+        "message": f"Links de afiliado actualizados ({updated_count} videos).",
         "product_id": product.id,
-        "affiliate_url": product.affiliate_url,
-        "videos_ready": videos_count,
-        "webhook_active": True,  # Indica que el webhook ahora puede enviar DMs con este link
+        "webhook_active": updated_count > 0,
     }
 
 
@@ -146,19 +152,20 @@ async def remove_affiliate_link(
     db: Session = Depends(get_db),
 ):
     """
-    Elimina el link de afiliado de un producto.
-    El webhook dejará de enviar DMs para este producto hasta que se vuelva a configurar.
+    Elimina los links de afiliado de todos los videos de un producto.
     """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-    product.affiliate_url = None
+    for video in product.videos:
+        video.affiliate_url = None
+        
     db.commit()
 
     return {
         "status": "success",
-        "message": f"Link de afiliado eliminado para '{product.title}'.",
+        "message": f"Links de afiliado eliminados para '{product.title}'.",
         "product_id": product.id,
         "webhook_active": False,
     }
