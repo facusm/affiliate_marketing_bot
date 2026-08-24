@@ -251,6 +251,15 @@ erDiagram
 
 ---
 
+### 3.4 Router: Publish (`/publish`)
+
+| Método | Ruta | Body | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/publish/{video_id}` | — | Sube y publica un único video generado en Instagram Reels. |
+| `POST` | `/publish/product/{product_id}` | — | Sube y publica *todos* los videos (`RENDERED`) asociados al producto. Encola tareas asíncronas en bloque. |
+
+---
+
 ### 3.4 Router: LLM (`/llm`)
 
 | Método | Ruta                              | Body | Descripción                                          |
@@ -267,13 +276,14 @@ erDiagram
 | `POST` | `/webhook`  | JSON event body de Meta Graph API            | Recibe eventos de Instagram (comentarios → DM automático) |
 
 **Flujo del Webhook POST:**
-1. Meta envía un evento de comentario de Instagram
-2. Se limpia el texto del comentario (quita puntuación, pasa a UPPERCASE)
-3. Se busca en `Video.cta_keyword` un match exacto
-4. Si hay match → se obtiene `Product.affiliate_url` del producto asociado
-5. Se selecciona el template de DM según `Video.language`
-6. Se envía DM vía Meta Graph API (`POST /v19.0/{ACCOUNT_ID}/messages`)
-7. El procesamiento corre en `BackgroundTasks` para devolver 200 OK rápido
+1. Meta envía un evento de comentario de Instagram.
+2. Se limpia el texto del comentario (quita puntuación, pasa a UPPERCASE).
+3. Se verifica si hay coincidencia con `Video.cta_keyword` o si contiene **intención de compra universal** (por ejemplo: "precio", "info", "quiero", "link" para español).
+4. Si hay match → se obtiene `Product.affiliate_url` del producto asociado.
+5. Se selecciona el template de DM según `Video.language`.
+6. Se realiza un `POST` público para responder al comentario del usuario (ej: "¡Te envié el link por privado! 🚀").
+7. Se envía el DM privado vía Meta Graph API (`POST /v19.0/{ACCOUNT_ID}/messages`).
+8. El procesamiento corre en `BackgroundTasks` para devolver `200 OK` rápido.
 
 ---
 
@@ -312,11 +322,14 @@ flowchart TD
 
 | Paso | Módulo | Función | Input | Output |
 |------|--------|---------|-------|--------|
+| 0 | `app/orchestrator.py` | `_preflight_checks()` | (Variables de entorno) | *Ping a OpenAI, ElevenLabs, y Kling. Corta la ejecución si hay fallos o falta de saldo.* |
 | 1 | `app/ai_engine/ai_prompt_engineer.py` | `generate_video_prompt()` | Título, features, image_url, price, num_clips=2 | `AIVideoPrompt` (video_prompt, clip_prompts[], scene_description, duration, camera_movement) |
 | 2 ‖ | `app/ai_engine/ai_video_generator.py` | `generate_ai_video_batch()` | clip_prompts[], image_url (local filepath), aspect_ratio="9:16" | paths[] (`.mp4` descargados) |
 | 3 ‖ | `app/llm/script_generator.py` | `generate_multilang_scripts()` | Título, precio, features, rating, reviews, languages[] | `LangScript[]` (hook, body, cta, cta_keyword, keywords × N idiomas) |
 | 4 ‖×N | `app/utils/elevenlabs.py` | `generate_tts_with_timestamps()` | text, voice_id (nativo del idioma) | (audio_path, word_timestamps[]) |
 | 5 ‖×N | `app/render/viral_renderer.py` | `render_viral_video()` | ai_clips_paths, audio_path, hook_text, word_timestamps, cta_keyword | `.mp4` viral en `storage/outputs/` |
+
+> **Sistema de Resumption (Checkpoints)**: Antes de iniciar el Paso 1, el orquestador verifica si ya hay videos persistidos en la base de datos con un `base_video_path` existente (ej: Kling AI ya fue ejecutado en un run previo pero falló el TTS). En tal caso, se **saltan** los pasos 1 y 2, y se procede directo al Paso 3, ahorrando créditos de API.
 
 > **Nota:** `‖` indica ejecución en paralelo con `asyncio.gather()`.
 > Los pasos 2 y 3 corren en paralelo. El paso 4+5 corre en paralelo para cada idioma. Para evitar conflictos de base de datos concurrente, el paso 4 crea su propia `SessionLocal()`.

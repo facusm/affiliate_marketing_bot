@@ -43,3 +43,18 @@ El sistema está diseñado para que puedas probar el contenido sin necesidad de 
 **Etapa 3: Activación Mágica**
 - Enviás el link al producto específico mediante una actualización simple (`PATCH /products/{id}/affiliate-link`).
 - **Resultado Inmediato**: En el milisegundo en que se guarda el link, el Webhook de Instagram se "despierta" para ese producto. El próximo comentario que entre recibirá el DM automático en su idioma nativo, sin que tengas que reiniciar el servidor ni regrabar los videos.
+
+## 🚀 Flujo de Publicación Controlada
+Para mantener el control absoluto, la publicación en Meta no se hace sin tu permiso.
+Desde el panel web de Streamlit, dentro del **Inventario de Productos**, podés revisar cuántos videos ya están renderizados. Cuando estés listo, apretás el botón **"🚀 Publicar Videos en Meta"**.
+El sistema se encarga de subir automáticamente los 6 videos a sus 6 cuentas correspondientes de Instagram, vinculando internamente el `ig_media_id` para que el Webhook sepa a quién responder.
+
+## 🤖 Webhook Inteligente (Intents y Respuestas Públicas)
+El Webhook no solo reacciona a la palabra clave exacta generada por el bot. Incorpora **Intención de Compra Universal**: si un usuario dice "precio", "info", "quiero" o "link" en su idioma nativo, el sistema lo reconoce y actúa.
+Además, el bot no solo manda el DM en privado, sino que hace un `POST` público respondiendo al comentario del usuario (ej: "¡Te envié el link por privado! 🚀"), lo que incrementa el engagement del posteo.
+
+## 🛡️ Pre-Flight Checks y Resiliencia (Checkpoints)
+El orquestador de IA cuenta con validaciones estrictas antes de gastar saldo en las APIs:
+- Verifica el balance de caracteres en ElevenLabs.
+- Valida los tokens de OpenAI y Kling AI mediante endpoints ligeros.
+- **Sistema de Checkpoints**: Si un producto ya generó el video base mudo en Kling AI y el proceso se interrumpió, al volver a lanzar el pipeline, el orquestador recuperará el video existente desde la base de datos saltándose la generación y evitando cobros dobles, retomando la ejecución desde la fase de doblaje (ElevenLabs).
