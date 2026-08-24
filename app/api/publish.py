@@ -3,7 +3,7 @@ import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from app.database.database import get_db
+from app.database.database import get_db, SessionLocal
 from app.database.models import Video, ContentStatus
 
 logger = logging.getLogger(__name__)
@@ -13,21 +13,23 @@ router = APIRouter(prefix="/publish", tags=["Publishing"])
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 
-async def _publish_to_instagram(video_id: int, db: Session):
+async def _publish_to_instagram(video_id: int):
     """Proceso asíncrono para subir y publicar el video en Instagram."""
-    video = db.query(Video).filter(Video.id == video_id).first()
-    if not video or not video.final_video_path:
-        logger.error(f"[Publish] Video {video_id} no encontrado o sin renderizar.")
-        return
+    db: Session = SessionLocal()
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video or not video.final_video_path:
+            logger.error(f"[Publish] Video {video_id} no encontrado o sin renderizar.")
+            return
 
-    lang = video.language.upper() if video.language else "ES"
-    ig_account_id = os.getenv(f"INSTAGRAM_ACCOUNT_ID_{lang}")
+        lang = video.language.upper() if video.language else "ES"
+        ig_account_id = os.getenv(f"INSTAGRAM_ACCOUNT_ID_{lang}")
 
-    if not META_ACCESS_TOKEN or not ig_account_id:
-        logger.error(f"[Publish] Faltan credenciales de Meta para el idioma {lang}.")
-        video.status = ContentStatus.ERROR
-        db.commit()
-        return
+        if not META_ACCESS_TOKEN or not ig_account_id:
+            logger.error(f"[Publish] Faltan credenciales de Meta para el idioma {lang}.")
+            video.status = ContentStatus.ERROR
+            db.commit()
+            return
 
     # Extraer nombre del archivo (ej: video_123.mp4)
     filename = os.path.basename(video.final_video_path)
@@ -102,6 +104,8 @@ async def _publish_to_instagram(video_id: int, db: Session):
             logger.error(f"[Publish] Error publicando video {video.id}: {str(e)}")
             video.status = ContentStatus.ERROR
             db.commit()
+    finally:
+        db.close()
 
 @router.post("/{video_id}")
 async def publish_video(video_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -116,5 +120,27 @@ async def publish_video(video_id: int, background_tasks: BackgroundTasks, db: Se
     if not video.final_video_path:
         raise HTTPException(status_code=400, detail="El video aún no tiene final_video_path (no está renderizado).")
 
-    background_tasks.add_task(_publish_to_instagram, video_id, db)
+    background_tasks.add_task(_publish_to_instagram, video_id)
     return {"status": "success", "message": f"Publicación del video {video_id} encolada."}
+
+@router.post("/product/{product_id}")
+async def publish_product(product_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    Inicia la publicación asíncrona de todos los videos RENDERED de un producto.
+    """
+    videos = db.query(Video).filter(
+        Video.product_id == product_id,
+        Video.status == ContentStatus.RENDERED
+    ).all()
+    
+    if not videos:
+        raise HTTPException(status_code=404, detail="No se encontraron videos RENDERED listos para publicar.")
+        
+    for video in videos:
+        background_tasks.add_task(_publish_to_instagram, video.id)
+        
+    return {
+        "status": "success", 
+        "message": f"Publicación encolada para {len(videos)} videos del producto {product_id}.",
+        "queued_videos": len(videos)
+    }

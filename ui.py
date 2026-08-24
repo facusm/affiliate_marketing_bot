@@ -252,6 +252,18 @@ with tab2:
                                     st.success("Link actualizado. ¡Recargá la lista para ver los cambios!")
                                 else:
                                     st.error("Error al actualizar el link.")
+                        
+                        if p.get('videos_count', 0) > 0:
+                            if st.button("🚀 Publicar Videos en Meta", key=f"pub_{p['id']}"):
+                                pub_res = requests.post(f"{API_BASE_URL}/publish/product/{p['id']}")
+                                if pub_res.status_code == 200:
+                                    st.success(pub_res.json().get("message", "Publicación iniciada"))
+                                else:
+                                    try:
+                                        err_msg = pub_res.json().get("detail", pub_res.text)
+                                    except:
+                                        err_msg = pub_res.text
+                                    st.error(f"Error al publicar: {err_msg}")
         else:
             st.error("No se pudo obtener la lista de productos.")
     except Exception as e:

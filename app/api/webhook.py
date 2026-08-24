@@ -43,6 +43,27 @@ DM_TEMPLATES: dict[str, str] = {
 # Fallback genérico si el idioma no está mapeado
 DM_TEMPLATE_FALLBACK = "Here's the link you requested: {url}"
 
+# ─── Universal Purchase Intents por Idioma ────────────────────────────────────
+UNIVERSAL_INTENTS = {
+    "es": ["precio", "info", "quiero", "link"],
+    "en": ["price", "info", "want", "link"],
+    "pt": ["preço", "info", "quero", "link"],
+    "de": ["preis", "info", "will", "link"],
+    "fr": ["prix", "info", "veux", "lien"],
+    "it": ["prezzo", "info", "voglio", "link"],
+}
+
+# ─── Respuestas Públicas Automáticas por Idioma ───────────────────────────────
+PUBLIC_REPLIES = {
+    "es": "¡Te envié el link por privado! 🚀",
+    "en": "I sent you the link via DM! 🚀",
+    "pt": "Te enviei o link por mensagem privada! 🚀",
+    "de": "Ich habe dir den Link per DM geschickt! 🚀",
+    "fr": "Je t'ai envoyé le lien en privé ! 🚀",
+    "it": "Ti ho inviato il link in privato! 🚀",
+}
+PUBLIC_REPLY_FALLBACK = "I sent you the link via DM! 🚀"
+
 
 # ─── 1. Verificación del Webhook (GET) ────────────────────────────────────────
 
@@ -96,9 +117,20 @@ async def process_instagram_comment(comment_text: str, comment_id: str, media_id
             logger.info(f"[Webhook] No hay video registrado para media_id: {media_id}")
             return
             
-        # Verificar que el comentario contenga la palabra clave correcta
-        if clean_text not in video.cta_keyword.upper():
-            logger.info(f"[Webhook] Comentario '{clean_text}' no matchea la keyword '{video.cta_keyword}' del video {video.id}")
+        lang_code = video.language or "es"
+        
+        # Verificar que el comentario contenga la palabra clave correcta o intent universal
+        cta_keyword = video.cta_keyword.upper() if video.cta_keyword else ""
+        intents = [intent.upper() for intent in UNIVERSAL_INTENTS.get(lang_code, [])]
+        
+        is_match = False
+        if cta_keyword and cta_keyword in clean_text:
+            is_match = True
+        elif any(intent in clean_text for intent in intents):
+            is_match = True
+            
+        if not is_match:
+            logger.info(f"[Webhook] Comentario '{clean_text}' no matchea la keyword '{cta_keyword}' ni intents universales.")
             return
             
         product = video.product
@@ -143,7 +175,22 @@ async def process_instagram_comment(comment_text: str, comment_id: str, media_id
             }
         }
 
+        # 4.5 Construir Respuesta Pública
+        reply_template = PUBLIC_REPLIES.get(lang_code, PUBLIC_REPLY_FALLBACK)
+        reply_url = f"https://graph.facebook.com/v19.0/{comment_id}/replies"
+        reply_payload = {
+            "message": reply_template
+        }
+
         async with httpx.AsyncClient() as client:
+            # Enviar Respuesta Pública
+            res_reply = await client.post(reply_url, json=reply_payload, headers=headers)
+            if res_reply.status_code == 200:
+                logger.info(f"[Webhook] Respuesta pública enviada para el comentario {comment_id}")
+            else:
+                logger.error(f"[Webhook] Error enviando respuesta pública: {res_reply.text}")
+                
+            # Enviar DM
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code == 200:
                 logger.info(

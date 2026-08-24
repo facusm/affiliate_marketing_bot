@@ -14,6 +14,8 @@ Punto central que ejecuta el pipeline completo:
 import json
 import logging
 import asyncio
+import os
+import httpx
 
 from app.database.models import Product, Video, ContentStatus
 from app.database.database import SessionLocal
@@ -82,6 +84,53 @@ async def run_pipeline(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PRE-FLIGHT CHECKS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _preflight_checks():
+    """
+    Realiza ping a las APIs críticas antes de comenzar el pipeline.
+    Si alguna falla o no hay saldo, arroja ValueError abortando el proceso.
+    """
+    logger.info("[Orchestrator] 🔍 Ejecutando Pre-flight checks de APIs...")
+    
+    # 1. OpenAI (gpt-4o-mini)
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    if not openai_key:
+        raise ValueError("Falta OPENAI_API_KEY")
+    async with httpx.AsyncClient() as client:
+        res = await client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {openai_key}"})
+        if res.status_code != 200:
+            raise ValueError(f"OpenAI API check falló: {res.status_code}")
+            
+    # 2. ElevenLabs
+    eleven_key = os.getenv("ELEVENLABS_API_KEY", "")
+    if not eleven_key:
+        raise ValueError("Falta ELEVENLABS_API_KEY")
+    async with httpx.AsyncClient() as client:
+        res = await client.get("https://api.elevenlabs.io/v1/user", headers={"xi-api-key": eleven_key})
+        if res.status_code == 200:
+            data = res.json()
+            subs = data.get("subscription", {})
+            chars_count = subs.get("character_count", 0)
+            chars_limit = subs.get("character_limit", 0)
+            if chars_count >= chars_limit and chars_limit > 0:
+                raise ValueError("ElevenLabs: No quedan caracteres disponibles.")
+        else:
+            raise ValueError(f"ElevenLabs API check falló: {res.status_code}")
+            
+    # 3. Kling AI
+    kling_key = os.getenv("KLING_API_KEY", "")
+    if not kling_key:
+        raise ValueError("Falta KLING_API_KEY")
+    async with httpx.AsyncClient() as client:
+        res = await client.get("https://api.klingai.com/v1/videos/text2video", headers={"Authorization": f"Bearer {kling_key}"})
+        if res.status_code == 401:
+            raise ValueError("Kling AI: Token inválido (401 Unauthorized)")
+            
+    logger.info("[Orchestrator] ✅ Pre-flight checks OK. APIs operativas.")
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PIPELINE AI VIDEO MULTI-IDIOMA
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -106,53 +155,76 @@ async def _run_pipeline_ai(
     """
     product_id = product_data["id"]
 
-    # ── Paso 1: Generar Prompt de Video Hipnótico ─────────────────────────────
-    logger.info(f"[Pipeline] Generando prompt de video IA para producto {product_id}")
+    # ── 0. Pre-Flight Checks ──────────────────────────────────────────────────
+    await _preflight_checks()
 
-    ai_prompt = await generate_video_prompt(
-        product_title=product_data["title"],
-        product_features=product_data["features"],
-        image_url=product_data["image_url"],
-        price=product_data["price"],
-        num_clips=2,
-        strategy="product_first",
-    )
+    # ── 1. Buscar Checkpoint (Resumption) ─────────────────────────────────────
+    db_check = SessionLocal()
+    existing_videos = db_check.query(Video).filter(Video.product_id == product_id).all()
+    db_check.close()
+    
+    ai_clips_paths = []
+    ai_prompt_used = ""
+    camera_used = ""
+    
+    for v in existing_videos:
+        if v.base_video_path:
+            try:
+                paths = json.loads(v.base_video_path)
+                if paths:
+                    ai_clips_paths = paths
+                    ai_prompt_used = v.ai_video_prompt or "Recuperado de DB"
+                    break
+            except Exception:
+                pass
 
-    logger.info(f"[Pipeline] Prompt generado: {ai_prompt.scene_description}")
+    if ai_clips_paths:
+        logger.info(f"[Pipeline] ♻️ CHECKPOINT: Video base de Kling ya existe. Omitiendo generación de video IA.")
+        # Aún necesitamos los scripts
+        lang_scripts = await generate_multilang_scripts(
+            title=product_data["title"],
+            price=product_data["price"] or 0.0,
+            features=product_data["features"],
+            rating=product_data["rating"],
+            reviews_count=product_data["reviews_count"],
+            languages=languages,
+        )
+    else:
+        # ── 2. Generar Video IA + Guiones Multi-Idioma en Paralelo ────────────
+        logger.info(f"[Pipeline] Generando prompt de video IA para producto {product_id}")
+        ai_prompt = await generate_video_prompt(
+            product_title=product_data["title"],
+            product_features=product_data["features"],
+            image_url=product_data["image_url"],
+            price=product_data["price"],
+            num_clips=2,
+            strategy="product_first",
+        )
+        ai_prompt_used = ai_prompt.scene_description
+        camera_used = getattr(ai_prompt, "camera_movement", "")
+        clip_prompts = ai_prompt.clip_prompts if getattr(ai_prompt, "clip_prompts", None) else [ai_prompt.video_prompt]
 
-    # ── Paso 2 + 3: Generar Video IA + Guiones Multi-Idioma en Paralelo ──────
-    clip_prompts = ai_prompt.clip_prompts if ai_prompt.clip_prompts else [ai_prompt.video_prompt]
+        logger.info(f"[Pipeline] Lanzando {len(clip_prompts)} clips IA + guiones en paralelo...")
+        video_task = generate_ai_video_batch(
+            prompts=clip_prompts,
+            video_id=product_id,
+            image_url=product_data["image_url"],
+            aspect_ratio="9:16",
+            duration=getattr(ai_prompt, "suggested_duration", 5),
+        )
+        scripts_task = generate_multilang_scripts(
+            title=product_data["title"],
+            price=product_data["price"] or 0.0,
+            features=product_data["features"],
+            rating=product_data["rating"],
+            reviews_count=product_data["reviews_count"],
+            languages=languages,
+        )
 
-    logger.info(
-        f"[Pipeline] Lanzando {len(clip_prompts)} clips IA + guiones multi-idioma "
-        f"({len(languages)} idiomas) en paralelo..."
-    )
+        ai_clips_paths, lang_scripts = await asyncio.gather(video_task, scripts_task)
+        logger.info(f"[Pipeline] Video IA generado ({len(ai_clips_paths)} clips) + {len(lang_scripts)} guiones.")
 
-    video_task = generate_ai_video_batch(
-        prompts=clip_prompts,
-        video_id=product_id,
-        image_url=product_data["image_url"],
-        aspect_ratio="9:16",
-        duration=ai_prompt.suggested_duration,
-    )
-
-    scripts_task = generate_multilang_scripts(
-        title=product_data["title"],
-        price=product_data["price"] or 0.0,
-        features=product_data["features"],
-        rating=product_data["rating"],
-        reviews_count=product_data["reviews_count"],
-        languages=languages,
-    )
-
-    ai_clips_paths, lang_scripts = await asyncio.gather(video_task, scripts_task)
-
-    logger.info(
-        f"[Pipeline] Video IA generado ({len(ai_clips_paths)} clips) + "
-        f"{len(lang_scripts)} guiones multi-idioma listos"
-    )
-
-    # ── Paso 4: Para cada idioma → TTS + Render + DB (en paralelo) ────────────
+    # ── Paso 3: Para cada idioma → TTS + Render + DB (en paralelo) ────────────
 
     async def _process_language(lang_script) -> dict:
         """
@@ -166,22 +238,30 @@ async def _run_pipeline_ai(
         db = SessionLocal()
         video = None
         try:
-            # Crear registro Video para este idioma
-            video = Video(
-                product_id=product_id,
-                hook=lang_script.hook,
-                script=lang_script.body,
-                call_to_action=lang_script.cta,
-                cta_keyword=lang_script.cta_keyword,
-                keywords=json.dumps(lang_script.keywords),
-                engine="ai",
-                language=lang_code,
-                ai_video_prompt=ai_prompt.video_prompt,
-                base_video_path=json.dumps(ai_clips_paths),
-                stock_videos_paths=json.dumps(ai_clips_paths),
-                status=ContentStatus.SCRIPT_GENERATED,
-            )
-            db.add(video)
+            # Buscar si ya existe el registro Video para reutilizarlo
+            video = db.query(Video).filter(
+                Video.product_id == product_id,
+                Video.language == lang_code
+            ).first()
+            
+            if not video:
+                video = Video(product_id=product_id, language=lang_code)
+                db.add(video)
+
+            # Actualizar registro
+            video.hook = lang_script.hook
+            video.script = lang_script.body
+            video.call_to_action = lang_script.cta
+            video.cta_keyword = lang_script.cta_keyword
+            video.keywords = json.dumps(lang_script.keywords)
+            video.engine = "ai"
+            video.ai_video_prompt = ai_prompt_used
+            video.base_video_path = json.dumps(ai_clips_paths)
+            video.stock_videos_paths = json.dumps(ai_clips_paths)
+            
+            if not video.status or video.status == ContentStatus.PENDING:
+                video.status = ContentStatus.SCRIPT_GENERATED
+                
             db.commit()
             db.refresh(video)
 
@@ -283,8 +363,8 @@ async def _run_pipeline_ai(
         ),
         "data": {
             "ai_clips_count": len(ai_clips_paths),
-            "ai_prompt_used": ai_prompt.scene_description,
-            "camera_movement": ai_prompt.camera_movement,
+            "ai_prompt_used": ai_prompt_used,
+            "camera_movement": camera_used,
             "reels": successful,
             "errors": failed,
         },
