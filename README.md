@@ -41,8 +41,8 @@ El sistema está diseñado para que puedas probar el contenido sin necesidad de 
 - Una vez que te aprueban en el programa de afiliados y tenés los links, consultás al bot (`GET /products/`) para ver la lista de tus productos generados y obtener el `ID` numérico de cada uno.
 
 **Etapa 3: Activación Mágica**
-- Enviás el link al producto específico mediante una actualización simple (`PATCH /products/{id}/affiliate-link`).
-- **Resultado Inmediato**: En el milisegundo en que se guarda el link, el Webhook de Instagram se "despierta" para ese producto. El próximo comentario que entre recibirá el DM automático en su idioma nativo, sin que tengas que reiniciar el servidor ni regrabar los videos.
+- Desde el **Inventario de Productos** en la UI web, agregás los links correspondientes a cada idioma (ej. `amazon.es/..` para ES y `amazon.com/..` para EN). Internamente, esto actualiza los links individuales vía `PATCH /products/{id}/affiliate-link`.
+- **Resultado Inmediato**: En el milisegundo en que se guardan los links, el Webhook de Instagram se "despierta" para esos idiomas específicos del producto. El próximo comentario que entre recibirá el DM automático con el link de afiliado correcto para su país, sin que tengas que reiniciar el servidor ni regrabar los videos.
 
 ## 🚀 Flujo de Publicación Controlada
 Para mantener el control absoluto, la publicación en Meta no se hace sin tu permiso.
