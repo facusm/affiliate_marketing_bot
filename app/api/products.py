@@ -42,8 +42,10 @@ async def list_products(db: Session = Depends(get_db)):
         
         video_data = [
             {
+                "id": v.id,
                 "language": v.language,
-                "affiliate_url": v.affiliate_url
+                "affiliate_url": v.affiliate_url,
+                "status": v.status.value if v.status else None
             }
             for v in videos
         ]

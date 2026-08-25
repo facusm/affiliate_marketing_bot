@@ -69,7 +69,7 @@ async def generate_video_script(
     
     ESTRUCTURA Y REGLAS DEL GUION:
     1. Hook (Gancho): Máximo 3 segundos. Tiene que ser disruptivo, polémico o plantear un problema muy común con el que la audiencia se identifique al instante.
-    2. Body (Desarrollo): Explica cómo este producto en específico es la solución definitiva. Destaca beneficios reales y usa un tono dinámico y coloquial. Oraciones cortas. Si hay datos de rating y opiniones, DEBES mencionarlos como prueba social (ej: "tiene más de 500 opiniones con 4.8 estrellas").
+    2. Body (Desarrollo): Explica cómo este producto en específico es la solución definitiva. Destaca beneficios reales y usa un tono dinámico y coloquial. Oraciones cortas. Si hay datos de rating y opiniones, NUNCA menciones el número exacto de reseñas o el rating preciso. Usa validación social relativa o rangos abstractos (ej. "miles de reseñas positivas", "uno de los mejor valorados", "con excelentes calificaciones").
     3. CTA (Llamado a la acción): El final del guion SIEMPRE debe pedir que comenten una palabra para enviarles el link por mensaje privado.
     4. Keywords Visuales: Genera palabras clave SIEMPRE EN INGLÉS que describan visualmente el problema o la solución. Se usarán para buscar clips de stock de fondo (ej: 'person tired cleaning', 'satisfying slicing').
     
@@ -143,7 +143,7 @@ Your task: Given product data, generate a highly persuasive, retention-optimized
 
 RULES FOR EVERY SCRIPT:
 1. Hook (3 seconds max): Disruptive, provocative, or relatable problem statement. Adapted to the cultural tone of the language.
-2. Body: Dynamic, short sentences explaining why this product is the definitive solution. If rating/reviews are available, mention them as social proof.
+2. Body: Dynamic, short sentences explaining why this product is the definitive solution. If rating/reviews are available, NEVER mention the exact number of reviews or precise rating. Use relative social validation or abstract ranges (e.g., "thousands of positive reviews", "one of the top rated", "with excellent ratings").
 3. CTA: MUST ask viewers to comment a keyword to receive the product link via DM. Adapt the phrasing culturally (e.g., Spanish "Comentá", English "Comment", Portuguese "Comente", German "Kommentiere", French "Commente", Italian "Commenta").
 4. Keywords: 3-5 English keywords for Pexels stock search. MUST be IDENTICAL across all languages.
 

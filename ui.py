@@ -264,17 +264,28 @@ with tab2:
                                 else:
                                     st.error("Error al actualizar los links.")
                         
-                        if p.get('videos_count', 0) > 0:
-                            if st.button("🚀 Publicar Videos en Meta", key=f"pub_{p['id']}"):
-                                pub_res = requests.post(f"{API_BASE_URL}/publish/product/{p['id']}")
-                                if pub_res.status_code == 200:
-                                    st.success(pub_res.json().get("message", "Publicación iniciada"))
-                                else:
-                                    try:
-                                        err_msg = pub_res.json().get("detail", pub_res.text)
-                                    except:
-                                        err_msg = pub_res.text
-                                    st.error(f"Error al publicar: {err_msg}")
+                        if p.get('videos'):
+                            st.write("📺 **Estado de Videos**")
+                            for v in p['videos']:
+                                lang = v['language'].upper()
+                                status = v.get('status', 'N/A')
+                                vid = v['id']
+                                
+                                cols = st.columns([2, 2, 2])
+                                cols[0].write(f"**Idioma:** {lang}")
+                                cols[1].write(f"**Estado:** `{status}`")
+                                
+                                if status == 'RENDERED':
+                                    if cols[2].button(f"Publicar {lang}", key=f"pub_vid_{vid}"):
+                                        pub_res = requests.post(f"{API_BASE_URL}/publish/{vid}")
+                                        if pub_res.status_code == 200:
+                                            st.success(f"Publicación de {lang} encolada.")
+                                        else:
+                                            try:
+                                                err_msg = pub_res.json().get("detail", pub_res.text)
+                                            except:
+                                                err_msg = pub_res.text
+                                            st.error(f"Error al publicar {lang}: {err_msg}")
         else:
             st.error("No se pudo obtener la lista de productos.")
     except Exception as e:
