@@ -62,8 +62,8 @@ async def execute_pipeline(
     languages: str = Query(
         default=",".join(DEFAULT_LANGUAGES),
         description=(
-            "Códigos de idioma separados por coma (default: es,en,pt,de,fr,it). "
-            "Ej: 'es,en,pt' para generar solo 3 idiomas."
+            "Códigos de idioma separados por coma (default: es,es_latam,es_mx,en,pt,de,fr,it). "
+            "Ej: 'es,es_latam,es_mx' para generar solo las variantes de español."
         ),
     ),
     db: Session = Depends(get_db),
@@ -146,8 +146,8 @@ async def execute_pipeline_from_db(
     languages: str = Query(
         default=",".join(DEFAULT_LANGUAGES),
         description=(
-            "Códigos de idioma separados por coma (default: es,en,pt,de,fr,it). "
-            "Ej: 'es,en,pt' para generar solo 3 idiomas."
+            "Códigos de idioma separados por coma (default: es,es_latam,es_mx,en,pt,de,fr,it). "
+            "Ej: 'es,es_latam,es_mx' para generar solo las variantes de español."
         ),
     ),
     db: Session = Depends(get_db),

@@ -23,6 +23,8 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
 VOICE_MAP: dict[str, str] = {
     "es": os.getenv("ELEVENLABS_VOICE_ES", ""),
+    "es_latam": os.getenv("ELEVENLABS_VOICE_LATAM", ""),
+    "es_mx": os.getenv("ELEVENLABS_VOICE_MX", ""),
     "en": os.getenv("ELEVENLABS_VOICE_EN", ""),
     "pt": os.getenv("ELEVENLABS_VOICE_PT", ""),
     "de": os.getenv("ELEVENLABS_VOICE_DE", ""),

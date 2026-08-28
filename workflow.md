@@ -217,7 +217,7 @@ erDiagram
 **Query Params:**
 | Param      | Tipo   | Default                       | Descripción                                          |
 |------------|--------|-------------------------------|------------------------------------------------------|
-| `languages`| `str`  | `"es,en,pt,de,fr,it"`         | Códigos de idioma separados por coma                 |
+| `languages`| `str`  | `"es,es_latam,es_mx,en,pt,de,fr,it"` | Códigos de idioma separados por coma (incluye 3 variantes de español) |
 
 ---
 
@@ -237,7 +237,7 @@ erDiagram
 |----------|-----------------------------------------|---------------------------------------------|--------------------------------------------------|
 | `GET`    | `/products/`                            | —                                           | Lista todos los productos con conteo de videos   |
 | `GET`    | `/products/{product_id}`                | —                                           | Detalle de un producto + lista de videos por idioma |
-| `PATCH`  | `/products/{product_id}/affiliate-link` | `{"links": {"es": "..."}}` | Agregar/actualizar link de afiliado por idioma    |
+| `PATCH`  | `/products/{product_id}/affiliate-link` | `{"links": {"es": "...", "es_latam": "..."}}` | Agregar/actualizar link de afiliado por idioma    |
 | `DELETE` | `/products/{product_id}/affiliate-link` | —                                           | Eliminar links de afiliado                        |
 
 **Modelo `AffiliateLinkUpdate`:**
@@ -245,6 +245,8 @@ erDiagram
 {
     "links": {
         "es": "https://amazon.es/...",
+        "es_latam": "https://amazon.com/...?tag=ar",
+        "es_mx": "https://amazon.com.mx/...",
         "en": "https://amazon.com/..."
     }
 }
@@ -388,7 +390,7 @@ flowchart LR
 ```python
 # Pipeline B — por idioma
 class LangScript(BaseModel):
-    language_code: str  # Código ISO: es, en, pt, de, fr, it
+    language_code: str  # Código: es, es_latam, es_mx, en, pt, de, fr, it
     hook: str
     body: str
     cta_keyword: str    # Keyword nativa (OFERTA, OFFER, ANGEBOT...)
@@ -423,12 +425,14 @@ class AIVideoPrompt(BaseModel):
 
 **Mapeo de voces nativas por idioma** (`resolve_voice_for_language()`):
 ```
-es → ELEVENLABS_VOICE_ES (fallback: ELEVENLABS_VOICE_ID)
-en → ELEVENLABS_VOICE_EN
-pt → ELEVENLABS_VOICE_PT
-de → ELEVENLABS_VOICE_DE
-fr → ELEVENLABS_VOICE_FR
-it → ELEVENLABS_VOICE_IT
+es      → ELEVENLABS_VOICE_ES     (fallback: ELEVENLABS_VOICE_ID)
+es_latam → ELEVENLABS_VOICE_LATAM  (fallback: ELEVENLABS_VOICE_ID)
+es_mx   → ELEVENLABS_VOICE_MX     (fallback: ELEVENLABS_VOICE_ID)
+en      → ELEVENLABS_VOICE_EN
+pt      → ELEVENLABS_VOICE_PT
+de      → ELEVENLABS_VOICE_DE
+fr      → ELEVENLABS_VOICE_FR
+it      → ELEVENLABS_VOICE_IT
 ```
 
 **Formato de `word_timestamps`:**
@@ -450,7 +454,9 @@ Generados internamente por `_chars_to_word_timestamps()` a partir de la alineaci
 | `OPENAI_API_KEY`         | ✅        | API key de OpenAI (gpt-4o-mini)                                |
 | `ELEVENLABS_API_KEY`     | ✅        | API key de ElevenLabs TTS                                      |
 | `ELEVENLABS_VOICE_ID`    | ✅        | Voice ID default (fallback global)                             |
-| `ELEVENLABS_VOICE_ES`    | ❌        | Voice ID nativo para español                                   |
+| `ELEVENLABS_VOICE_ES`    | ❌        | Voice ID nativo para español (España)                          |
+| `ELEVENLABS_VOICE_LATAM` | ❌        | Voice ID nativo para español (Argentina / Rioplatense)         |
+| `ELEVENLABS_VOICE_MX`    | ❌        | Voice ID nativo para español (México)                          |
 | `ELEVENLABS_VOICE_EN`    | ❌        | Voice ID nativo para inglés                                    |
 | `ELEVENLABS_VOICE_PT`    | ❌        | Voice ID nativo para portugués                                 |
 | `ELEVENLABS_VOICE_DE`    | ❌        | Voice ID nativo para alemán                                    |
@@ -462,7 +468,9 @@ Generados internamente por `_chars_to_word_timestamps()` a partir de la alineaci
 | `KLING_API_KEY`          | ✅**      | API Key estándar de Kling                                      |
 | `META_VERIFY_TOKEN`      | ❌***     | Token de verificación del webhook de Instagram                 |
 | `META_ACCESS_TOKEN`      | ❌***     | Access Token de Meta Graph API (long-lived)                    |
-| `INSTAGRAM_ACCOUNT_ID_ES`| ❌***     | ID de la cuenta de Instagram Business (Español)                |
+| `INSTAGRAM_ACCOUNT_ID_ES`      | ❌*** | ID de la cuenta de Instagram Business (Español — España)     |
+| `INSTAGRAM_ACCOUNT_ID_ES_LATAM`| ❌*** | ID de la cuenta de Instagram Business (Español — Argentina)  |
+| `INSTAGRAM_ACCOUNT_ID_ES_MX`  | ❌*** | ID de la cuenta de Instagram Business (Español — México)     |
 | `INSTAGRAM_ACCOUNT_ID_EN`| ❌***     | ID de la cuenta de Instagram Business (Inglés)                 |
 | `INSTAGRAM_ACCOUNT_ID_PT`| ❌***     | ID de la cuenta de Instagram Business (Portugués)              |
 | `INSTAGRAM_ACCOUNT_ID_DE`| ❌***     | ID de la cuenta de Instagram Business (Alemán)                 |

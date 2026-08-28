@@ -11,7 +11,9 @@ client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # ─── Mapeo de códigos de idioma a nombres legibles ─────────────────────────────
 
 LANGUAGE_MAP = {
-    "es": "Spanish (LATAM)",
+    "es": "Spanish (Spain / Castellano)",
+    "es_latam": "Spanish (Argentina / Rioplatense)",
+    "es_mx": "Spanish (Mexico)",
     "en": "English",
     "pt": "Portuguese (Brazil)",
     "de": "German",
@@ -19,7 +21,7 @@ LANGUAGE_MAP = {
     "it": "Italian",
 }
 
-DEFAULT_LANGUAGES = ["es", "en", "pt", "de", "fr", "it"]
+DEFAULT_LANGUAGES = ["es", "es_latam", "es_mx", "en", "pt", "de", "fr", "it"]
 
 
 # ─── Modelos de Respuesta ─────────────────────────────────────────────────────
@@ -34,7 +36,7 @@ class VideoScriptResponse(BaseModel):
 
 class LangScript(BaseModel):
     """Guion de video para un idioma específico."""
-    language_code: str = Field(description="Código ISO del idioma: es, en, pt, de, fr, it.")
+    language_code: str = Field(description="Código del idioma: es, es_latam, es_mx, en, pt, de, fr, it.")
     hook: str = Field(description="Gancho inicial de 3 segundos en el idioma indicado.")
     body: str = Field(description="Desarrollo del video en el idioma indicado.")
     cta_keyword: str = Field(description="Palabra clave del CTA en MAYÚSCULAS, en el IDIOMA NATIVO de este guion (ej: OFERTA, OFFER, ANGEBOT). Debe ser corta y fácil de escribir.")
@@ -144,8 +146,13 @@ Your task: Given product data, generate a highly persuasive, retention-optimized
 RULES FOR EVERY SCRIPT:
 1. Hook (3 seconds max): Disruptive, provocative, or relatable problem statement. Adapted to the cultural tone of the language.
 2. Body: Dynamic, short sentences explaining why this product is the definitive solution. If rating/reviews are available, NEVER mention the exact number of reviews or precise rating. Use relative social validation or abstract ranges (e.g., "thousands of positive reviews", "one of the top rated", "with excellent ratings").
-3. CTA: MUST ask viewers to comment a keyword to receive the product link via DM. Adapt the phrasing culturally (e.g., Spanish "Comentá", English "Comment", Portuguese "Comente", German "Kommentiere", French "Commente", Italian "Commenta").
+3. CTA: MUST ask viewers to comment a keyword to receive the product link via DM. Adapt the phrasing culturally (e.g., Spanish "Comentá"/"Comenta", English "Comment", Portuguese "Comente", German "Kommentiere", French "Commente", Italian "Commenta").
 4. Keywords: 3-5 English keywords for Pexels stock search. MUST be IDENTICAL across all languages.
+
+SPANISH REGIONAL VARIANTS — FOLLOW STRICTLY:
+- "es" = Spanish from Spain (Castellano peninsular). Use peninsular conjugations ("tú tienes", "vosotros"), modismos españoles ("mola", "flipar", "tío/tía"), and a tone natural for the Spanish market.
+- "es_mx" = Mexican neutral Spanish. Use standard Latin American "tú" conjugations, Mexican idioms and expressions natural for Mexico ("chido", "neta", "padre"), and orient the copy to a Mexican audience shopping on Amazon México.
+- "es_latam" = Argentine Rioplatense Spanish. It is MANDATORY to use voseo throughout ("vos tenés", "vos sabés", "comentá", "mirá"). Use natural Argentine modismos ("re copado", "bárbaro", "posta", "mortal"). Orient the copy to an Argentine audience that buys products with international shipping. The CTA MUST use the voseo imperative ("Comentá", "Escribí").
 
 CRITICAL RULES:
 - REGLA ESTRICTA: NUNCA menciones el precio ni el valor monetario del producto en el guion. Tu objetivo es generar curiosidad destacando el dolor que resuelve y sus beneficios. El CTA debe invitar a comentar la palabra clave única generada para este producto (cta_keyword) para recibir el enlace.

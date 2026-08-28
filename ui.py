@@ -16,7 +16,9 @@ import requests
 API_BASE_URL = "http://localhost:8000"
 
 LANGUAGE_OPTIONS = {
-    "es": "🇪🇸 Español (LATAM)",
+    "es": "🇪🇸 Español (España)",
+    "es_latam": "🇦🇷 Español (Argentina)",
+    "es_mx": "🇲🇽 Español (México)",
     "en": "🇬🇧 English",
     "pt": "🇧🇷 Português",
     "de": "🇩🇪 Deutsch",

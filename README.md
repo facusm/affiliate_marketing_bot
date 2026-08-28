@@ -1,7 +1,7 @@
 # 📝 Resumen del Proyecto: Affiliate Marketing Bot (v4.0.0)
 
 ## 🎯 Objetivo Principal
-Un sistema automatizado que transforma la foto y los datos de un producto (ingresados mediante un panel web fácil de usar) en **6 Reels virales en distintos idiomas**. El bot publica los videos automáticamente usando la Meta Graph API y usa un Webhook oficial de Instagram para **enviar mensajes directos (DMs) automáticos** con un link de afiliado a los usuarios que comentan una palabra clave específica.
+Un sistema automatizado que transforma la foto y los datos de un producto (ingresados mediante un panel web fácil de usar) en **8 Reels virales en distintos idiomas** (incluyendo 3 variantes regionales de español). El bot publica los videos automáticamente usando la Meta Graph API y usa un Webhook oficial de Instagram para **enviar mensajes directos (DMs) automáticos** con un link de afiliado a los usuarios que comentan una palabra clave específica.
 
 ## 🧠 La Receta Viral (El "Efecto Adictivo")
 El sistema no genera videos genéricos; está programado a nivel de código para maximizar la retención del usuario (watch-time) y forzar la interacción:
@@ -22,13 +22,13 @@ El sistema incluye un panel de control interactivo en `ui.py`.
 La arquitectura está dockerizada para su rápido despliegue en un VPS (ej. DigitalOcean):
 - **`docker-compose.yml`**: Levanta de manera orquestada la Base de Datos (PostgreSQL 15), la API (FastAPI) y la UI (Streamlit).
 - **Publicación Automática**: El backend cuenta con un endpoint (`POST /publish/{id}`) que se comunica con la Meta Graph API para subir y publicar los Reels generados automáticamente.
-- **Enrutamiento Inteligente Multi-Cuenta**: El webhook fue optimizado para rutear los comentarios usando el `ig_media_id` proveído por Meta tras la publicación, asociando las interacciones al Reel exacto. Además, soporta **6 cuentas de Instagram distintas** (una por idioma), utilizando un único token y respondiendo de forma dinámica desde la cuenta correcta.
+- **Enrutamiento Inteligente Multi-Cuenta**: El webhook fue optimizado para rutear los comentarios usando el `ig_media_id` proveído por Meta tras la publicación, asociando las interacciones al Reel exacto. Además, soporta **8 cuentas de Instagram distintas** (una por idioma/variante regional), utilizando un único token y respondiendo de forma dinámica desde la cuenta correcta.
 
 ## 🌍 Arquitectura Multi-Idioma (Eficiencia de Costos)
 Para maximizar el alcance global minimizando el gasto en APIs:
 - **Paso 1**: Se genera **1 solo video mudo** de alta calidad pagando la API de Kling una única vez.
-- **Paso 2**: El LLM redacta 6 guiones adaptados culturalmente en 1 sola llamada (ES, EN, PT, DE, FR, IT). Cada idioma genera su propia palabra clave nativa (ej: OFERTA, OFFER, ANGEBOT).
-- **Paso 3**: Se generan 6 audios distintos y se renderizan 6 Reels finales usando el mismo video base mudo.
+- **Paso 2**: El LLM redacta 8 guiones adaptados culturalmente en 1 sola llamada (ES 🇪🇸, ES_LATAM 🇦🇷, ES_MX 🇲🇽, EN, PT, DE, FR, IT). Cada idioma genera su propia palabra clave nativa (ej: OFERTA, OFFER, ANGEBOT). Para las variantes de español, el LLM adapta modismos, conjugaciones (voseo rioplatense para Argentina, tuteo peninsular para España, tuteo mexicano para México) y tono cultural.
+- **Paso 3**: Se generan 8 audios distintos con voces nativas por variante y se renderizan 8 Reels finales usando el mismo video base mudo.
 
 ## 🔗 Flujo de Trabajo Diferido (Añadir Links Después)
 El sistema está diseñado para que puedas probar el contenido sin necesidad de tener las cuentas de afiliado aprobadas desde el día uno.
@@ -47,7 +47,7 @@ El sistema está diseñado para que puedas probar el contenido sin necesidad de 
 ## 🚀 Flujo de Publicación Controlada
 Para mantener el control absoluto, la publicación en Meta no se hace sin tu permiso.
 Desde el panel web de Streamlit, dentro del **Inventario de Productos**, podés revisar cuántos videos ya están renderizados. Cuando estés listo, apretás el botón **"🚀 Publicar Videos en Meta"**.
-El sistema se encarga de subir automáticamente los 6 videos a sus 6 cuentas correspondientes de Instagram, vinculando internamente el `ig_media_id` para que el Webhook sepa a quién responder.
+El sistema se encarga de subir automáticamente los 8 videos a sus cuentas correspondientes de Instagram, vinculando internamente el `ig_media_id` para que el Webhook sepa a quién responder.
 
 ## 🤖 Webhook Inteligente (Intents y Respuestas Públicas)
 El Webhook no solo reacciona a la palabra clave exacta generada por el bot. Incorpora **Intención de Compra Universal**: si un usuario dice "precio", "info", "quiero" o "link" en su idioma nativo, el sistema lo reconoce y actúa.
