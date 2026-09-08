@@ -60,3 +60,7 @@ El orquestador de IA cuenta con validaciones estrictas antes de gastar saldo en 
 - Verifica el balance de caracteres en ElevenLabs.
 - Valida los tokens de OpenAI y Kling AI mediante endpoints ligeros.
 - **Sistema de Checkpoints**: Si un producto ya generó los 3 clips mudos en Kling AI y el proceso se interrumpió, al volver a lanzar el pipeline, el orquestador recuperará los clips existentes desde la base de datos saltándose la generación y evitando cobros dobles, retomando la ejecución desde la fase de doblaje (ElevenLabs).
+
+## 🧹 Sistema de Almacenamiento y Limpieza (Deep Delete)
+- **Agrupación Física**: Todo el contenido generado (imágenes, audios TTS, clips crudos Kling y videos virales finales) se guarda y aísla en subcarpetas nombradas con el `ID` único del producto dentro de la carpeta `storage/`.
+- **Eliminación Profunda (Deep Delete)**: Si eliminas un producto desde la interfaz de usuario, el sistema no solo lo remueve de la base de datos (y elimina todos sus videos asociados en cascada), sino que **borra físicamente** todos los archivos locales que ese producto haya generado (imágenes, audios y videos), previniendo fugas de memoria o acumulación de archivos huérfanos a largo plazo.

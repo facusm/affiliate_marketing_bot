@@ -56,11 +56,11 @@ affiliate_marketing_bot/
 │       ├── elevenlabs.py         # TTS reutilizable + timestamps + voice mapping por idioma
 │       └── moviepy_helpers.py    # Helpers MoviePy: overlays, subtítulos, export, font resolution
 │
-└── storage/                      # Archivos generados (no versionado en git)
-    ├── audio/                    # Archivos .mp3 de ElevenLabs TTS
-    ├── images/                   # Imágenes de producto subidas localmente
-    ├── videos/                   # Clips IA (Kling, etc.)
-    └── outputs/                  # Videos finales renderizados (.mp4)
+├── storage/                      # Archivos generados (agrupados por product_id)
+    ├── audio/                    # storage/audio/{product_id}/{language}.mp3
+    ├── images/                   # storage/images/{product_id}/imagen.png
+    ├── videos/                   # storage/videos/{product_id}/{clip_index}.mp4
+    └── outputs/                  # storage/outputs/{product_id}/{language}_viral.mp4
 ```
 
 ---
@@ -239,6 +239,7 @@ erDiagram
 | `GET`    | `/products/{product_id}`                | —                                           | Detalle de un producto + lista de videos por idioma |
 | `PATCH`  | `/products/{product_id}/affiliate-link` | `{"links": {"es": "...", "es_latam": "..."}}` | Agregar/actualizar link de afiliado por idioma    |
 | `DELETE` | `/products/{product_id}/affiliate-link` | —                                           | Eliminar links de afiliado                        |
+| `DELETE` | `/products/{product_id}`                | —                                           | Elimina producto, videos asociados y borra físicamente las 4 carpetas locales (`rmtree`) |
 
 **Modelo `AffiliateLinkUpdate`:**
 ```json
