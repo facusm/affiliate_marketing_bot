@@ -293,7 +293,8 @@ async def _run_pipeline_ai(
             voice_id = resolve_voice_for_language(lang_code)
 
             audio_path, word_timestamps = await generate_tts_with_timestamps(
-                video_id=video.id,
+                product_id=product_id,
+                language=lang_code,
                 text=full_text,
                 voice_id=voice_id,
             )
@@ -308,7 +309,8 @@ async def _run_pipeline_ai(
 
             # ── Renderizar reel viral ─────────────────────────────────────
             final_path = await render_viral_video(
-                video_id=video.id,
+                product_id=product_id,
+                language=lang_code,
                 ai_clips_paths=clip_paths,
                 audio_path=audio_path,
                 hook_text=video.call_to_action or video.hook or "",

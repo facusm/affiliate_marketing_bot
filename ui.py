@@ -289,6 +289,15 @@ with tab2:
                                             except:
                                                 err_msg = pub_res.text
                                             st.error(f"Error al publicar {lang}: {err_msg}")
+                                            
+                        st.divider()
+                        if st.button("🗑️ Eliminar Producto", type="primary", key=f"del_prod_{p['id']}"):
+                            del_res = requests.delete(f"{API_BASE_URL}/products/{p['id']}")
+                            if del_res.status_code == 200:
+                                st.success("Producto y archivos eliminados exitosamente.")
+                                st.rerun()
+                            else:
+                                st.error(f"Error al eliminar: {del_res.text}")
         else:
             st.error("No se pudo obtener la lista de productos.")
     except Exception as e:

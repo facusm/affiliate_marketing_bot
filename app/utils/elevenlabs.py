@@ -54,7 +54,8 @@ os.makedirs(DEFAULT_AUDIO_DIR, exist_ok=True)
 
 
 async def generate_tts(
-    video_id: int,
+    product_id: int,
+    language: str,
     text: str,
     output_dir: str | None = None,
     voice_id: str | None = None,
@@ -66,7 +67,8 @@ async def generate_tts(
     Genera audio con ElevenLabs TTS y lo guarda localmente.
 
     Args:
-        video_id: ID del video (para nombrar el archivo).
+        product_id: ID del producto (para nombrar la subcarpeta).
+        language: Código de idioma (para nombrar el archivo).
         text: Texto completo a sintetizar.
         output_dir: Directorio de salida. Si es None, usa el default.
         voice_id: ID de la voz. Si es None, usa la variable de entorno.
@@ -78,8 +80,9 @@ async def generate_tts(
         Ruta absoluta al archivo de audio generado (.mp3).
     """
     save_dir = output_dir or DEFAULT_AUDIO_DIR
-    os.makedirs(save_dir, exist_ok=True)
-    audio_path = os.path.join(save_dir, f"{video_id}.mp3")
+    product_audio_dir = os.path.join(save_dir, str(product_id))
+    os.makedirs(product_audio_dir, exist_ok=True)
+    audio_path = os.path.join(product_audio_dir, f"{language}.mp3")
 
     if not ELEVENLABS_API_KEY:
         logger.warning("ELEVENLABS_API_KEY no está configurada en las variables de entorno.")
@@ -102,7 +105,7 @@ async def generate_tts(
         },
     }
 
-    logger.info(f"[TTS] Generando audio para video {video_id} ({len(text)} chars)")
+    logger.info(f"[TTS] Generando audio para {product_id}/{language} ({len(text)} chars)")
 
     async with httpx.AsyncClient() as client:
         try:
@@ -133,7 +136,8 @@ async def generate_tts(
 
 
 async def generate_tts_with_timestamps(
-    video_id: int,
+    product_id: int,
+    language: str,
     text: str,
     output_dir: str | None = None,
     voice_id: str | None = None,
@@ -150,8 +154,9 @@ async def generate_tts_with_timestamps(
         Cada timestamp es: {"word": str, "start": float, "end": float}
     """
     save_dir = output_dir or DEFAULT_AUDIO_DIR
-    os.makedirs(save_dir, exist_ok=True)
-    audio_path = os.path.join(save_dir, f"{video_id}.mp3")
+    product_audio_dir = os.path.join(save_dir, str(product_id))
+    os.makedirs(product_audio_dir, exist_ok=True)
+    audio_path = os.path.join(product_audio_dir, f"{language}.mp3")
 
     if not ELEVENLABS_API_KEY:
         logger.warning("ELEVENLABS_API_KEY no está configurada.")
@@ -173,7 +178,7 @@ async def generate_tts_with_timestamps(
         },
     }
 
-    logger.info(f"[TTS+Timestamps] Generando audio con timestamps para video {video_id}")
+    logger.info(f"[TTS+Timestamps] Generando audio con timestamps para {product_id}/{language}")
 
     async with httpx.AsyncClient() as client:
         try:

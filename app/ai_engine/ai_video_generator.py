@@ -290,7 +290,7 @@ def _get_output_path(video_id: int, clip_index: int) -> str:
     """Genera la ruta de salida para un clip de video IA."""
     video_dir = os.path.join(STORAGE_VIDEO_DIR, str(video_id))
     os.makedirs(video_dir, exist_ok=True)
-    return os.path.join(video_dir, f"ai_clip_{clip_index}.mp4")
+    return os.path.join(video_dir, f"{clip_index}.mp4")
 
 
 async def _poll_and_download(

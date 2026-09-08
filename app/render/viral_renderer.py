@@ -126,7 +126,8 @@ def _build_clip_sequence(
 
 
 def _render_viral_sync(
-    video_id: int,
+    product_id: int,
+    language: str,
     ai_clips_paths: dict[str, str] | list[str],
     audio_path: str,
     hook_text: str,
@@ -145,7 +146,8 @@ def _render_viral_sync(
       [3] Subtítulos dinámicos (sincronizados con audio, centro)
 
     Args:
-        video_id: ID del video para nombrar el archivo final.
+        product_id: ID del producto para nombrar la carpeta.
+        language: Código de idioma para nombrar el archivo.
         ai_clips_paths: Dict {"i2v": path, "b_roll_1": path, "b_roll_2": path}
                         o lista de paths (legacy fallback).
         audio_path: Ruta al archivo de audio (ElevenLabs TTS).
@@ -159,7 +161,9 @@ def _render_viral_sync(
     Returns:
         Ruta absoluta al video final renderizado (.mp4).
     """
-    output_path = os.path.join(STORAGE_OUTPUTS_DIR, f"{video_id}_viral.mp4")
+    product_output_dir = os.path.join(STORAGE_OUTPUTS_DIR, str(product_id))
+    os.makedirs(product_output_dir, exist_ok=True)
+    output_path = os.path.join(product_output_dir, f"{language}_viral.mp4")
 
     # ── 1. Cargar Audio ───────────────────────────────────────────────────────
     audio_clip = AudioFileClip(audio_path)
@@ -238,7 +242,7 @@ def _render_viral_sync(
     final_video = CompositeVideoClip(overlay_layers, size=(REEL_WIDTH, REEL_HEIGHT))
 
     # ── 5. Exportar ───────────────────────────────────────────────────────────
-    logger.info(f"[Viral Render] Renderizando video viral {video_id}...")
+    logger.info(f"[Viral Render] Renderizando video viral {product_id}/{language}...")
     export_video(final_video, output_path, fps=30)
 
     # ── 6. Limpiar Memoria ────────────────────────────────────────────────────
@@ -253,7 +257,8 @@ def _render_viral_sync(
 
 
 async def render_viral_video(
-    video_id: int,
+    product_id: int,
+    language: str,
     ai_clips_paths: dict[str, str] | list[str],
     audio_path: str,
     hook_text: str,
@@ -274,7 +279,8 @@ async def render_viral_video(
     """
     return await asyncio.to_thread(
         _render_viral_sync,
-        video_id,
+        product_id,
+        language,
         ai_clips_paths,
         audio_path,
         hook_text,

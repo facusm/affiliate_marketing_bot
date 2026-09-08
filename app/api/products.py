@@ -171,3 +171,45 @@ async def remove_affiliate_link(
         "product_id": product.id,
         "webhook_active": False,
     }
+
+
+@router.delete("/{product_id}")
+async def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Elimina permanentemente un producto de la base de datos (y sus videos asociados por cascade),
+    y borra físicamente todos sus archivos generados (imágenes, audios, clips crudos, outputs).
+    """
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado.")
+
+    title = product.title
+
+    # 1. Eliminar de la base de datos (cascade borrará los registros de Video)
+    db.delete(product)
+    db.commit()
+
+    # 2. Eliminar físicamente los archivos agrupados por product_id
+    import os
+    import shutil
+    
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
+    folders_to_delete = [
+        os.path.join(base_dir, "images", str(product_id)),
+        os.path.join(base_dir, "audio", str(product_id)),
+        os.path.join(base_dir, "videos", str(product_id)),
+        os.path.join(base_dir, "outputs", str(product_id)),
+    ]
+
+    for folder in folders_to_delete:
+        if os.path.exists(folder):
+            shutil.rmtree(folder, ignore_errors=True)
+
+    return {
+        "status": "success",
+        "message": f"Producto '{title}' y todos sus archivos eliminados correctamente.",
+        "product_id": product_id,
+    }

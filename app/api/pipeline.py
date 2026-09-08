@@ -80,31 +80,13 @@ async def execute_pipeline(
     estilo Hormozi y voces nativas por idioma.
     """
     try:
-        # 1. Validar y guardar la imagen localmente
-        allowed_extensions = {".png", ".jpg", ".jpeg", ".webp"}
-        file_ext = os.path.splitext(image.filename or "upload.png")[1].lower()
-        if file_ext not in allowed_extensions:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Formato de imagen no soportado: '{file_ext}'. Usá PNG, JPG o WEBP.",
-            )
-
-        image_filename = f"{uuid.uuid4()}{file_ext}"
-        image_path = os.path.join(STORAGE_IMAGES_DIR, image_filename)
-
-        content = await image.read()
-        with open(image_path, "wb") as f:
-            f.write(content)
-
-        logger.info(f"[Pipeline] Imagen guardada: {image_path} ({len(content)} bytes)")
-
-        # 2. Crear el producto en la DB
+        # 1. Crear el producto en la DB con un path temporal
         db_product = Product(
             url=f"direct-upload-{uuid.uuid4().hex[:8]}",
             title=title,
             price=price,
             features=description,
-            image_url=image_path,
+            image_url="", # Se actualiza enseguida
             rating=rating,
             reviews_count=reviews_count,
             status=ContentStatus.SCRAPED,
@@ -113,7 +95,43 @@ async def execute_pipeline(
         db.commit()
         db.refresh(db_product)
 
-        logger.info(f"[Pipeline] Producto creado: ID {db_product.id} — {title}")
+        logger.info(f"[Pipeline] Producto creado en BD: ID {db_product.id} — {title}")
+
+        # 2. Guardar la imagen localmente en la carpeta del producto
+        allowed_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+        file_ext = os.path.splitext(image.filename or "upload.png")[1].lower()
+        if file_ext not in allowed_extensions:
+            # Rollback: borrar el producto huérfano
+            db.delete(db_product)
+            db.commit()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Formato de imagen no soportado: '{file_ext}'. Usá PNG, JPG o WEBP.",
+            )
+
+        product_images_dir = os.path.join(STORAGE_IMAGES_DIR, str(db_product.id))
+        os.makedirs(product_images_dir, exist_ok=True)
+
+        image_filename = f"{uuid.uuid4()}{file_ext}"
+        image_path = os.path.join(product_images_dir, image_filename)
+
+        try:
+            content = await image.read()
+            with open(image_path, "wb") as f:
+                f.write(content)
+        except Exception as e:
+            # Rollback: borrar el producto huérfano si falla el guardado físico
+            db.delete(db_product)
+            db.commit()
+            logger.error(f"[Pipeline] Error guardando imagen física: {e}")
+            raise HTTPException(status_code=500, detail="Error al guardar la imagen física.")
+
+        # 2.5 Actualizar el producto con la ruta final de la imagen
+        db_product.image_url = image_path
+        db.commit()
+        db.refresh(db_product)
+
+        logger.info(f"[Pipeline] Imagen guardada en: {image_path} ({len(content)} bytes)")
 
         # 3. Parsear los idiomas
         lang_list = [lang.strip() for lang in languages.split(",") if lang.strip()]
