@@ -93,6 +93,114 @@ async def generate_ai_video(
         raise ValueError(f"Provider de video IA no soportado: {resolved_provider}")
 
 
+async def generate_hybrid_clips(
+    i2v_prompt: str,
+    b_roll_1_prompt: str,
+    b_roll_2_prompt: str,
+    video_id: int,
+    image_url: str | None = None,
+    aspect_ratio: str = "9:16",
+    duration: float = 5.0,
+    provider: str | None = None,
+) -> dict[str, str]:
+    """
+    Genera 3 clips de video en paralelo con arquitectura híbrida I2V + T2V.
+
+    Lanza 3 tareas simultáneas:
+      - Tarea A (I2V): Foto del producto con cámara estática.
+      - Tarea B (T2V): B-Roll sensorial/aspiracional.
+      - Tarea C (T2V): B-Roll del producto en uso (macro).
+
+    Args:
+        i2v_prompt: Prompt para el clip I2V (se le agrega instrucción de cámara estática).
+        b_roll_1_prompt: Prompt T2V para B-Roll sensorial.
+        b_roll_2_prompt: Prompt T2V para B-Roll producto en uso.
+        video_id: ID del video (para organizar archivos).
+        image_url: URL/ruta de la foto real del producto (para I2V).
+        aspect_ratio: Aspecto del video (default "9:16").
+        duration: Duración en segundos por clip.
+        provider: Override del provider (None = usar env var).
+
+    Returns:
+        Dict con claves "i2v", "b_roll_1", "b_roll_2" → rutas a los .mp4.
+    """
+    # Instrucción estricta de cámara estática para el clip I2V
+    static_camera_instruction = (
+        "Locked-off camera, static shot, absolute no camera movement. "
+        "Only the liquid/steam/context is moving. Ultra realistic."
+    )
+    i2v_full_prompt = f"{i2v_prompt} {static_camera_instruction}"
+
+    logger.info(
+        f"[AI Video Hybrid] Lanzando 3 clips en paralelo para video {video_id}: "
+        f"1 I2V + 2 T2V"
+    )
+
+    # Lanzar las 3 tareas en paralelo
+    results = await asyncio.gather(
+        # Tarea A: I2V con foto del producto (cámara estática)
+        generate_ai_video(
+            prompt=i2v_full_prompt,
+            video_id=video_id,
+            clip_index=0,
+            image_url=image_url,
+            aspect_ratio=aspect_ratio,
+            duration=duration,
+            provider=provider,
+        ),
+        # Tarea B: T2V B-Roll 1 (sensorial/aspiracional)
+        generate_ai_video(
+            prompt=b_roll_1_prompt,
+            video_id=video_id,
+            clip_index=1,
+            image_url=None,  # T2V: sin imagen
+            aspect_ratio=aspect_ratio,
+            duration=duration,
+            provider=provider,
+        ),
+        # Tarea C: T2V B-Roll 2 (producto en uso, macro)
+        generate_ai_video(
+            prompt=b_roll_2_prompt,
+            video_id=video_id,
+            clip_index=2,
+            image_url=None,  # T2V: sin imagen
+            aspect_ratio=aspect_ratio,
+            duration=duration,
+            provider=provider,
+        ),
+        return_exceptions=True,
+    )
+
+    # Procesar resultados
+    labels = ["i2v", "b_roll_1", "b_roll_2"]
+    clip_paths = {}
+    errors = []
+
+    for i, (label, result) in enumerate(zip(labels, results)):
+        if isinstance(result, Exception):
+            logger.error(f"[AI Video Hybrid] Error en {label} (clip {i}): {result}")
+            errors.append(f"{label}: {result}")
+        else:
+            clip_paths[label] = result
+            logger.info(f"[AI Video Hybrid] {label} completado: {result}")
+
+    if not clip_paths:
+        raise RuntimeError(
+            f"No se pudo generar ningún clip de video con IA. Errores: {errors}"
+        )
+
+    if "i2v" not in clip_paths:
+        logger.warning(
+            "[AI Video Hybrid] El clip I2V falló. Usando primer B-Roll como fallback."
+        )
+
+    logger.info(
+        f"[AI Video Hybrid] {len(clip_paths)}/3 clips generados exitosamente."
+    )
+
+    return clip_paths
+
+
 async def generate_ai_video_batch(
     prompts: list[str],
     video_id: int,
@@ -194,7 +302,7 @@ async def _poll_and_download(
     success_value: str = "succeeded",
     failure_values: list[str] | None = None,
     video_url_field: str = "output",
-    max_wait_seconds: int = 300,
+    max_wait_seconds: int = 1100,
     poll_interval: int = 10,
 ) -> str:
     """
@@ -227,7 +335,7 @@ async def _poll_and_download(
             response.raise_for_status()
             data = response.json()
 
-            status = data.get(status_field, "unknown")
+            status = _extract_nested(data, status_field) or "unknown"
             logger.info(f"[AI Video Poll] Status: {status} ({elapsed}s elapsed)")
 
             if status == success_value:
@@ -368,7 +476,7 @@ async def _generate_kling(
         # IMAGE-TO-VIDEO: usa la foto real del producto como referencia
         endpoint = "https://api.klingai.com/v1/videos/image2video"
         payload = {
-            "model_name": "kling-v3.0",
+            "model_name": "kling-v3",
             "mode": "std",
             "image": resolved_image,
             "prompt": prompt,
@@ -380,7 +488,7 @@ async def _generate_kling(
         # TEXT-TO-VIDEO: genera producto genérico desde el prompt
         endpoint = "https://api.klingai.com/v1/videos/text2video"
         payload = {
-            "model_name": "kling-v1-6",
+            "model_name": "kling-v3",
             "mode": "std",
             "prompt": prompt,
             "aspect_ratio": aspect_ratio,
@@ -395,7 +503,11 @@ async def _generate_kling(
             headers=headers,
             timeout=30.0,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(f"[Kling] Error de la API: {response.text}")
+            raise
         data = response.json()
         task_id = data.get("data", {}).get("task_id")
 

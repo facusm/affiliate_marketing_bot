@@ -1,6 +1,6 @@
 # Affiliate Marketing Bot — Workflow Técnico
 
-> **Versión del análisis:** 2026-08-22 (Actualizado post-refactorización v4.0)  
+> **Versión del análisis:** 2026-09-08 (Actualizado post-refactorización v5.0 — Arquitectura Híbrida I2V + T2V)  
 > **Propósito:** Mapa técnico exhaustivo del estado actual del proyecto.
 
 ---
@@ -185,7 +185,7 @@ erDiagram
 ## 3. Endpoints de FastAPI
 
 **Base URL:** `http://localhost:8000`  
-**Versión API:** 4.0.0  
+**Versión API:** 5.0.0  
 **Lifespan:** Ejecuta `init_db()` (crea tablas si no existen) al arrancar.
 
 ### 3.1 Health Check
@@ -292,53 +292,55 @@ erDiagram
 
 ## 4. Flujo del Pipeline AI
 
-*(Desde v4.0, el Pipeline A/Pexels fue eliminado por completo, consolidando la app únicamente en videos generados por IA)*
+*(Desde v5.0, el pipeline usa una arquitectura híbrida I2V + T2V con 3 clips en paralelo para maximizar retención)*
 
 ### 4.1 Arquitectura de Alto Nivel
 
 ```mermaid
 flowchart TD
     A["📥 POST /pipeline/run (multipart)"] --> B["Guardar imagen local"]
-    B --> PB1["LLM: generate_video_prompt()"]
+    B --> PB1["LLM: generate_video_prompt() → HybridVideoPrompt"]
     
     PB1 --> PB2["Paso 2+3 en PARALELO"]
     
     subgraph PB2["asyncio.gather()"]
-        PB2A["Kling API: image-to-video → 1 video mudo"]
-        PB2B["LLM: generate_multilang_scripts() → N guiones"]
+        PB2A["Kling I2V: foto producto + cámara estática"]
+        PB2B["Kling T2V: B-Roll 1 (sensorial/aspiracional)"]
+        PB2C["Kling T2V: B-Roll 2 (producto en uso, macro)"]
+        PB2D["LLM: generate_multilang_scripts() → N guiones"]
     end
     
     PB2 --> PB3["Para cada idioma (en PARALELO, SessionLocal aislada)"]
     
     subgraph PB3["asyncio.gather() × N idiomas"]
         PB3A["ElevenLabs TTS con timestamps (voz nativa)"]
-        PB3A --> PB3B["Viral Renderer: video mudo + audio + subtítulos"]
+        PB3A --> PB3B["Viral Renderer: 3 clips + Ken Burns + audio + subtítulos"]
         PB3B --> PB3C["Video DB registro + actualización"]
     end
     
     PB3 --> PB4["N Reels Finales (.mp4)"]
 ```
 
-### 4.2 Pipeline AI Video Multi-Idioma
+### 4.2 Pipeline AI Video Híbrido Multi-Idioma
 
 **Archivo principal:** `app/orchestrator.py` → `_run_pipeline_ai()`
 
 | Paso | Módulo | Función | Input | Output |
 |------|--------|---------|-------|--------|
 | 0 | `app/orchestrator.py` | `_preflight_checks()` | (Variables de entorno) | *Ping a OpenAI, ElevenLabs, y Kling. Corta la ejecución si hay fallos o falta de saldo.* |
-| 1 | `app/ai_engine/ai_prompt_engineer.py` | `generate_video_prompt()` | Título, features, image_url, price, num_clips=2 | `AIVideoPrompt` (video_prompt, clip_prompts[], scene_description, duration, camera_movement) |
-| 2 ‖ | `app/ai_engine/ai_video_generator.py` | `generate_ai_video_batch()` | clip_prompts[], image_url (local filepath), aspect_ratio="9:16" | paths[] (`.mp4` descargados) |
-| 3 ‖ | `app/llm/script_generator.py` | `generate_multilang_scripts()` | Título, precio, features, rating, reviews, languages[] | `LangScript[]` (hook, body, cta, cta_keyword, keywords × N idiomas) |
+| 1 | `app/ai_engine/ai_prompt_engineer.py` | `generate_video_prompt()` | Título, features, image_url, price | `HybridVideoPrompt` (script, b_roll_1, b_roll_2, scene_description) |
+| 2 ‖ | `app/ai_engine/ai_video_generator.py` | `generate_hybrid_clips()` | i2v_prompt, b_roll_1, b_roll_2, image_url (local filepath), aspect_ratio="9:16" | dict {"i2v": path, "b_roll_1": path, "b_roll_2": path} |
+| 3 ‖ | `app/llm/script_generator.py` | `generate_multilang_scripts()` | Título, precio, features, rating, reviews, languages[], script_guide | `LangScript[]` (hook, body, cta, cta_keyword, keywords × N idiomas) |
 | 4 ‖×N | `app/utils/elevenlabs.py` | `generate_tts_with_timestamps()` | text, voice_id (nativo del idioma) | (audio_path, word_timestamps[]) |
-| 5 ‖×N | `app/render/viral_renderer.py` | `render_viral_video()` | ai_clips_paths, audio_path, hook_text, word_timestamps, cta_keyword | `.mp4` viral en `storage/outputs/` |
+| 5 ‖×N | `app/render/viral_renderer.py` | `render_viral_video()` | clip_paths (dict), audio_path, hook_text, word_timestamps, cta_keyword | `.mp4` viral en `storage/outputs/` |
 
 > **Sistema de Resumption (Checkpoints)**: Antes de iniciar el Paso 1, el orquestador verifica si ya hay videos persistidos en la base de datos con un `base_video_path` existente (ej: Kling AI ya fue ejecutado en un run previo pero falló el TTS). En tal caso, se **saltan** los pasos 1 y 2, y se procede directo al Paso 3, ahorrando créditos de API.
 
 > **Nota:** `‖` indica ejecución en paralelo con `asyncio.gather()`.
-> Los pasos 2 y 3 corren en paralelo. El paso 4+5 corre en paralelo para cada idioma. Para evitar conflictos de base de datos concurrente, el paso 4 crea su propia `SessionLocal()`.
+> Los pasos 2 y 3 corren en paralelo (las 3 tareas de Kling + los guiones). El paso 4+5 corre en paralelo para cada idioma. Para evitar conflictos de base de datos concurrente, el paso 4 crea su propia `SessionLocal()`.
 
 **Composición del Reel viral (MoviePy, `viral_renderer.py`):**
-- Capa 0: Video IA base (clips Kling concatenados, resize a 1080×1920)
+- Capa 0: 3 clips IA concatenados en secuencia (I2V+KenBurns → B-Roll 1 → B-Roll 2, resize a 1080×1920)
 - Capa 1: Dark overlay (ColorClip negro, opacity 15%)
 - Capa 2: Hook/CTA text fijo (amarillo, stroke negro, tercio superior, toda la duración)
 - Capa 3: Subtítulos dinámicos estilo Hormozi (grupos de 3 palabras, sincronizados con timestamps, centro)
@@ -350,24 +352,26 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    A["generate_ai_video()"] --> B{"AI_VIDEO_PROVIDER?"}
-    B -->|"kling"| C["_generate_kling()"]
-    B -->|"runway"| D["_generate_runway()"]
-    B -->|"luma"| E["_generate_luma()"]
-    B -->|"replicate"| F["_generate_replicate()"]
+    A["generate_hybrid_clips()"] --> B{"3 tareas en paralelo"}
+    B --> C["I2V: _generate_kling() + imagen"]
+    B --> D["T2V: _generate_kling() B-Roll 1"]
+    B --> E["T2V: _generate_kling() B-Roll 2"]
     
-    C --> G["API Key Auth (Bearer)"]
-    G --> H{"image_url?"}
-    H -->|"sí"| I["POST /v1/videos/image2video (kling-v3.0)"]
-    H -->|"no"| J["POST /v1/videos/text2video (kling-v1-6)"]
-    I --> K["_poll_and_download()"]
-    J --> K
-    K --> L[".mp4 descargado en storage/videos/{id}/"]
+    C --> F["API Key Auth (Bearer)"]
+    D --> F
+    E --> F
+    
+    F --> G{"image_url?"}
+    G -->|"sí"| H["POST /v1/videos/image2video (kling-v3)"]
+    G -->|"no"| I["POST /v1/videos/text2video (kling-v3)"]
+    H --> J["_poll_and_download()"]
+    I --> J
+    J --> K[".mp4 en storage/videos/{id}/"]
 ```
 
 **Patrón async común a todos los providers:**
 1. **Enviar job** → POST con el prompt → recibir `task_id`/`job_id`
-2. **Polling** → GET status cada 10s (max 300s) hasta `succeeded`/`failed`
+2. **Polling** → GET status cada 10s (max 1100s) hasta `succeeded`/`failed`
 3. **Download** → GET streaming del video → guardar en disco
 
 **Auth de Kling:** API Key enviada en el header Authorization como Bearer token.
@@ -382,8 +386,8 @@ flowchart LR
 
 | Función | Modelo Pydantic de respuesta | Prompt | Uso |
 |---------|------------------------------|--------|-----|
-| `generate_multilang_scripts()` | `MultiLangScriptResponse` → `list[LangScript]` | System prompt en inglés + reglas estrictas de *Curiosity Gap* (sin mencionar precio) + datos del producto + lista de idiomas | Generar guiones en varios idiomas |
-| `generate_video_prompt()` | `AIVideoPrompt` | `VIRAL_VIDEO_SYSTEM_PROMPT` (reglas de cinematografía hipnótica) + datos del producto | Prompt de video IA para Kling |
+| `generate_multilang_scripts()` | `MultiLangScriptResponse` → `list[LangScript]` | System prompt en inglés + reglas estrictas de *Curiosity Gap* (sin mencionar precio) + datos del producto + lista de idiomas + script_guide opcional | Generar guiones en varios idiomas |
+| `generate_video_prompt()` | `HybridVideoPrompt` | `HYBRID_VIDEO_SYSTEM_PROMPT` (reglas de arquitectura híbrida I2V+T2V) + datos del producto | Paquete de prompts híbrido (script + 2 B-Rolls) |
 
 **Modelos Pydantic del LLM:**
 
@@ -401,14 +405,12 @@ class LangScript(BaseModel):
 class MultiLangScriptResponse(BaseModel):
     scripts: list[LangScript]
 
-# Pipeline B — prompt de video
-class AIVideoPrompt(BaseModel):
-    video_prompt: str       # Prompt completo para API de video
-    scene_description: str  # Descripción legible (español, para logs)
-    suggested_duration: float  # 3-5 seg
-    camera_movement: str    # Movimiento de cámara principal
-    num_clips: int          # 2-3 clips distintos
-    clip_prompts: list[str] # Prompts individuales por clip
+# Pipeline B — prompt híbrido de video
+class HybridVideoPrompt(BaseModel):
+    script: str           # Guion corto (~40 palabras, ~15s) con curiosity gap
+    b_roll_1: str         # Prompt T2V: escena sensorial/aspiracional
+    b_roll_2: str         # Prompt T2V: producto en uso (macro)
+    scene_description: str # Descripción legible (español, para logs)
 ```
 
 ### 4.6 Detalle de ElevenLabs TTS
@@ -506,8 +508,11 @@ streamlit>=1.28.0       # Panel de control web
 
 ## 7. Observaciones Arquitectónicas (v4.0.0)
 
-### 7.1 Panel de Control (Streamlit)
-El proyecto incluye ahora un frontend en `ui.py` ejecutado con `streamlit run ui.py`. Este frontend se comunica con el endpoint FastAPI `POST /pipeline/run` pasándole la imagen subida físicamente a través de multipart form-data.
+### 7.1 Arquitectura Híbrida I2V + T2V (v5.0)
+El pipeline ahora genera **3 clips distintos en paralelo** usando Kling AI:
+- 1 clip I2V (Image-to-Video): foto del producto con cámara estática + efecto Ken Burns (zoom 1.0→1.15) en post-producción.
+- 2 clips T2V (Text-to-Video): B-Rolls dinámicos generados desde prompts del LLM.
+Esta arquitectura elimina la deformación de píxeles por I2V con movimiento de cámara y el aburrimiento visual por repetición de un solo clip.
 
 ### 7.2 Manejo de Concurrencia en DB
 Dado que las iteraciones de la generación de reels por idioma se procesan mediante `asyncio.gather()` de manera concurrente (en `orchestrator.py`), cada rutina de idioma instancia su propia conexión y sesión a la base de datos `SessionLocal()` temporalmente aislada en vez de usar la compartida del endpoint. Esto previene un *race condition* en SQLAlchemy.

@@ -1,13 +1,17 @@
 """
-Viral Renderer — Post-producción adictiva para Instagram Reels (Pipeline B).
+Viral Renderer — Post-producción adictiva para Instagram Reels (Pipeline Híbrido).
 
 Aplica el estilo visual típico de Reels virales de marketing faceless:
-  1. Tinte oscuro sutil (overlay 15%) para resaltar texto
-  2. Texto gancho fijo (CTA) en el tercio superior con fuente gruesa
-  3. Subtítulos dinámicos estilo Alex Hormozi (palabra por palabra, centrados)
-  4. Audio sincronizado con ElevenLabs TTS
+  1. Concatena 3 clips distintos (I2V + B-Roll 1 + B-Roll 2) en secuencia
+  2. Aplica efecto Ken Burns (zoom 1.0→1.15) al clip I2V estático
+  3. Tinte oscuro sutil (overlay 15%) para resaltar texto
+  4. Texto gancho fijo (CTA) en el tercio superior con fuente gruesa
+  5. Subtítulos dinámicos estilo Alex Hormozi (palabra por palabra, centrados)
+  6. Audio sincronizado con ElevenLabs TTS
 
-NO modifica el renderer original (video_renderer.py) del Pipeline A.
+La arquitectura híbrida evita:
+  - Deformación de píxeles por I2V con movimiento de cámara
+  - Aburrimiento visual por repetición de un solo clip en loop
 """
 
 import os
@@ -22,6 +26,7 @@ from moviepy import (
 
 from app.utils.moviepy_helpers import (
     apply_dark_overlay,
+    apply_ken_burns,
     create_hook_text,
     create_subtitle_clips,
     load_and_prepare_clips,
@@ -41,9 +46,88 @@ REEL_WIDTH = 1080
 REEL_HEIGHT = 1920
 
 
+def _build_clip_sequence(
+    clip_paths: dict[str, str] | list[str],
+    target_duration: float,
+) -> list[VideoFileClip]:
+    """
+    Construye la secuencia de clips para el video final.
+
+    Si recibe un dict (arquitectura híbrida):
+      - Ordena: i2v → b_roll_1 → b_roll_2
+      - Aplica Ken Burns al clip I2V
+      - Si la concatenación es más corta que target_duration, loopea la secuencia
+
+    Si recibe una lista (legacy/fallback):
+      - Usa load_and_prepare_clips() como antes
+
+    Args:
+        clip_paths: Dict {"i2v": path, "b_roll_1": path, "b_roll_2": path}
+                    o lista de paths (legacy).
+        target_duration: Duración total deseada en segundos.
+
+    Returns:
+        Lista de VideoFileClips procesados, listos para concatenar.
+    """
+    if isinstance(clip_paths, list):
+        # Legacy: lista plana de paths
+        return load_and_prepare_clips(
+            video_paths=clip_paths,
+            target_duration=target_duration,
+            target_width=REEL_WIDTH,
+            target_height=REEL_HEIGHT,
+        )
+
+    # Arquitectura Híbrida: dict con claves i2v, b_roll_1, b_roll_2
+    ordered_keys = ["i2v", "b_roll_1", "b_roll_2"]
+    available_paths = [clip_paths[k] for k in ordered_keys if k in clip_paths]
+
+    if not available_paths:
+        raise ValueError("No hay clips de video disponibles para procesar.")
+
+    # Cargar y redimensionar cada clip
+    raw_clips = []
+    for path in available_paths:
+        try:
+            clip = VideoFileClip(path)
+            if clip.w != REEL_WIDTH or clip.h != REEL_HEIGHT:
+                clip = clip.resized((REEL_WIDTH, REEL_HEIGHT))
+            raw_clips.append(clip)
+        except Exception as e:
+            logger.warning(f"[Viral Render] Error cargando clip {path}: {e}")
+            continue
+
+    if not raw_clips:
+        raise ValueError("Ningún clip de video pudo ser cargado correctamente.")
+
+    # Aplicar Ken Burns al primer clip (I2V) si es el clip estático del producto
+    if "i2v" in clip_paths and len(raw_clips) > 0:
+        logger.info("[Viral Render] Aplicando Ken Burns al clip I2V (hero shot)...")
+        raw_clips[0] = apply_ken_burns(raw_clips[0], start_scale=1.0, end_scale=1.15)
+
+    # Calcular duración total de la secuencia base
+    sequence_duration = sum(c.duration for c in raw_clips)
+
+    if sequence_duration >= target_duration:
+        # La secuencia es suficiente: concatenar y cortar al target
+        return raw_clips
+    else:
+        # Loopear la secuencia completa hasta cubrir el audio
+        loops_needed = int(target_duration / sequence_duration) + 1
+        looped_clips = []
+        for _ in range(loops_needed):
+            for clip in raw_clips:
+                looped_clips.append(clip)
+        logger.info(
+            f"[Viral Render] Secuencia ({sequence_duration:.1f}s) looped "
+            f"{loops_needed}x para cubrir audio ({target_duration:.1f}s)"
+        )
+        return looped_clips
+
+
 def _render_viral_sync(
     video_id: int,
-    ai_clips_paths: list[str],
+    ai_clips_paths: dict[str, str] | list[str],
     audio_path: str,
     hook_text: str,
     word_timestamps: list[dict] | None = None,
@@ -55,14 +139,15 @@ def _render_viral_sync(
     Función sincrónica de composición viral con MoviePy.
 
     Capas del video final (de abajo hacia arriba):
-      [0] Video base (clips IA concatenados, formato 9:16)
+      [0] Video base (3 clips IA concatenados: I2V+KenBurns → B-Roll1 → B-Roll2)
       [1] Dark overlay (negro, opacity configurable)
       [2] Hook/CTA text (fijo, tercio superior, toda la duración)
       [3] Subtítulos dinámicos (sincronizados con audio, centro)
 
     Args:
         video_id: ID del video para nombrar el archivo final.
-        ai_clips_paths: Lista de rutas a los clips de video generados por IA.
+        ai_clips_paths: Dict {"i2v": path, "b_roll_1": path, "b_roll_2": path}
+                        o lista de paths (legacy fallback).
         audio_path: Ruta al archivo de audio (ElevenLabs TTS).
         hook_text: Texto gancho/CTA fijo (ej: "Comentá OFERTA y te mando el link").
         word_timestamps: Timestamps por palabra para subtítulos dinámicos.
@@ -80,16 +165,15 @@ def _render_viral_sync(
     audio_clip = AudioFileClip(audio_path)
     total_duration = audio_clip.duration
 
-    # ── 2. Cargar y Preparar Clips de Video IA ────────────────────────────────
-    processed_clips = load_and_prepare_clips(
-        video_paths=ai_clips_paths,
-        target_duration=total_duration,
-        target_width=REEL_WIDTH,
-        target_height=REEL_HEIGHT,
-    )
+    # ── 2. Construir Secuencia de Clips (Híbrida o Legacy) ────────────────────
+    processed_clips = _build_clip_sequence(ai_clips_paths, total_duration)
 
     # Concatenar clips en secuencia
     base_video = concatenate_videoclips(processed_clips, method="compose")
+
+    # Cortar al largo del audio si sobra
+    if base_video.duration > total_duration:
+        base_video = base_video.subclipped(0, total_duration)
 
     # Asegurar que el video base tenga las dimensiones correctas
     if base_video.w != REEL_WIDTH or base_video.h != REEL_HEIGHT:
@@ -170,7 +254,7 @@ def _render_viral_sync(
 
 async def render_viral_video(
     video_id: int,
-    ai_clips_paths: list[str],
+    ai_clips_paths: dict[str, str] | list[str],
     audio_path: str,
     hook_text: str,
     word_timestamps: list[dict] | None = None,

@@ -119,6 +119,7 @@ async def generate_multilang_scripts(
     rating: float | None = None,
     reviews_count: int | None = None,
     languages: list[str] | None = None,
+    script_guide: str | None = None,
 ) -> list[LangScript]:
     """
     Genera guiones de video en múltiples idiomas en UNA SOLA llamada al LLM.
@@ -131,6 +132,8 @@ async def generate_multilang_scripts(
         rating: Rating del producto (opcional).
         reviews_count: Cantidad de reseñas (opcional).
         languages: Lista de códigos de idioma (default: todos los 6).
+        script_guide: Guía de guion del prompt engineer (~40 palabras) como
+                      referencia de estructura y vacío de curiosidad.
 
     Returns:
         Lista de LangScript, uno por cada idioma solicitado.
@@ -170,10 +173,17 @@ CRITICAL RULES:
     if not rating_info:
         rating_info = "\nRating/reviews: Not available (do not mention in scripts)."
 
+    # Build script guide context
+    guide_context = ""
+    if script_guide:
+        guide_context = f"""\n\nSCRIPT GUIDE (use as structural reference, do NOT translate literally):
+\"\"\"{script_guide}\"\"\"
+Adapt this script's curiosity gap structure and flow for each language. Make it feel native, not translated."""
+
     user_prompt = f"""Product: {title}
 Price: ${price}{rating_info}
 Key Features:
-{features}
+{features}{guide_context}
 
 Generate scripts for these languages: {lang_list_str}
 Each script must feel naturally written by a native speaker of that language."""

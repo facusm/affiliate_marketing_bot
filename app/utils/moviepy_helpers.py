@@ -200,6 +200,68 @@ def create_subtitle_clips(
     return subtitle_clips
 
 
+def apply_ken_burns(
+    clip: VideoFileClip,
+    start_scale: float = 1.0,
+    end_scale: float = 1.15,
+) -> VideoFileClip:
+    """
+    Aplica un efecto Ken Burns (zoom digital suave) a un clip de video.
+
+    Escala progresivamente el video de start_scale a end_scale a lo largo
+    de su duración, recortando (crop) al tamaño original para que las
+    dimensiones de salida no cambien.
+
+    Esto aporta dinamismo visual al clip I2V estático sin que la IA
+    deforme los píxeles originales del producto.
+
+    Args:
+        clip: VideoFileClip al cual aplicar el efecto.
+        start_scale: Factor de escala inicial (default 1.0 = tamaño original).
+        end_scale: Factor de escala final (default 1.15 = 15% de zoom).
+
+    Returns:
+        VideoFileClip con efecto Ken Burns aplicado.
+    """
+    original_w = clip.w
+    original_h = clip.h
+
+    def _ken_burns_frame(get_frame, t):
+        """Transforma cada frame aplicando zoom progresivo + crop central."""
+        import numpy as np
+        from PIL import Image
+
+        frame = get_frame(t)
+
+        # Calcular el factor de escala lineal para este instante
+        progress = t / clip.duration if clip.duration > 0 else 0
+        current_scale = start_scale + (end_scale - start_scale) * progress
+
+        if current_scale <= 1.0:
+            return frame
+
+        # Escalar el frame
+        new_w = int(original_w * current_scale)
+        new_h = int(original_h * current_scale)
+
+        img = Image.fromarray(frame)
+        img_scaled = img.resize((new_w, new_h), Image.LANCZOS)
+
+        # Crop central para volver al tamaño original
+        left = (new_w - original_w) // 2
+        top = (new_h - original_h) // 2
+        img_cropped = img_scaled.crop((left, top, left + original_w, top + original_h))
+
+        return np.array(img_cropped)
+
+    result = clip.transform(_ken_burns_frame)
+    logger.info(
+        f"[Ken Burns] Efecto aplicado: zoom {start_scale}x → {end_scale}x "
+        f"sobre clip de {clip.duration:.1f}s"
+    )
+    return result
+
+
 def load_and_prepare_clips(
     video_paths: list[str],
     target_duration: float,

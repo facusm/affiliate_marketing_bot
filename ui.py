@@ -10,10 +10,11 @@ Ejecutar con:
 
 import streamlit as st
 import requests
+import os
 
 # ─── Configuración ────────────────────────────────────────────────────────────
 
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 
 LANGUAGE_OPTIONS = {
     "es": "🇪🇸 Español (España)",
@@ -156,7 +157,7 @@ with tab1:
                         data=form_data,
                         files=files,
                         params=params,
-                        timeout=900,  # 15 min timeout para pipeline completo
+                        timeout=1200,  # 20 min timeout para pipeline completo
                     )
 
                     if response.status_code == 200:

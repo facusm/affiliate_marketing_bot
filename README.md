@@ -1,16 +1,17 @@
-# 📝 Resumen del Proyecto: Affiliate Marketing Bot (v4.0.0)
+# 📝 Resumen del Proyecto: Affiliate Marketing Bot (v5.0.0)
 
 ## 🎯 Objetivo Principal
 Un sistema automatizado que transforma la foto y los datos de un producto (ingresados mediante un panel web fácil de usar) en **8 Reels virales en distintos idiomas** (incluyendo 3 variantes regionales de español). El bot publica los videos automáticamente usando la Meta Graph API y usa un Webhook oficial de Instagram para **enviar mensajes directos (DMs) automáticos** con un link de afiliado a los usuarios que comentan una palabra clave específica.
 
 ## 🧠 La Receta Viral (El "Efecto Adictivo")
 El sistema no genera videos genéricos; está programado a nivel de código para maximizar la retención del usuario (watch-time) y forzar la interacción:
-1. **Visuales Hipnóticas (Kling IA v3.0)**: El motor de IA no recibe prompts simples. Se inyectan comandos de *cinematografía, tomas macro e iluminación volumétrica* para que la foto del producto se transforme en un clip visualmente impactante.
-2. **Subtítulos Estilo Hormozi**: El video procesa el audio palabra por palabra. Los subtítulos aparecen de forma agresiva y dinámica en el centro de la pantalla (de a 1 o 3 palabras). Esto obliga al ojo del usuario a seguir leyendo y evita que haga scroll.
-3. **Voz Nativa Acelerada (ElevenLabs)**: Se utilizan locuciones en idiomas nativos que suenan naturales, dinámicas y sin pausas largas.
-4. **Curiosity Gap (Vacío de Curiosidad)**: El LLM está programado bajo REGLA ESTRICTA para nunca mencionar el precio del producto, basando el "gancho" inicial en resolver un dolor o problema. Esto maximiza la necesidad del usuario de comentar para saber más.
-5. **Contraste Visual Premium**: Un filtro oscuro sutil (15% de opacidad) asegura que los subtítulos blancos y brillantes resalten a la perfección.
-6. **Fijación del CTA**: El llamado a la acción queda fijo en la pantalla, repitiéndole visualmente al cerebro qué palabra tiene que comentar.
+1. **Arquitectura Híbrida I2V + T2V (Kling v3.0)**: En lugar de repetir un solo clip en loop, el sistema genera **3 clips distintos en paralelo**: un Hero Shot estático del producto (Image-to-Video) + 2 B-Rolls dinámicos generados por Text-to-Video (escena sensorial + producto en uso en macro). Esto elimina el aburrimiento visual por repetición.
+2. **Efecto Ken Burns (Zoom Digital)**: El clip estático del producto recibe un zoom suave progresivo (1.0→1.15) frame-a-frame en post-producción, aportando dinamismo sin que la IA deforme los píxeles originales.
+3. **Subtítulos Estilo Hormozi**: El video procesa el audio palabra por palabra. Los subtítulos aparecen de forma agresiva y dinámica en el centro de la pantalla (de a 1 o 3 palabras). Esto obliga al ojo del usuario a seguir leyendo y evita que haga scroll.
+4. **Voz Nativa Acelerada (ElevenLabs)**: Se utilizan locuciones en idiomas nativos que suenan naturales, dinámicas y sin pausas largas.
+5. **Curiosity Gap (Vacío de Curiosidad)**: El LLM genera un guion corto (~40 palabras) que actúa como guía para los scripts multi-idioma, bajo REGLA ESTRICTA de nunca mencionar el precio del producto, basando el "gancho" inicial en resolver un dolor o problema. Esto maximiza la necesidad del usuario de comentar para saber más.
+6. **Contraste Visual Premium**: Un filtro oscuro sutil (15% de opacidad) asegura que los subtítulos blancos y brillantes resalten a la perfección.
+7. **Fijación del CTA**: El llamado a la acción queda fijo en la pantalla, repitiéndole visualmente al cerebro qué palabra tiene que comentar.
 
 ## 🖥️ Interfaz de Usuario (Streamlit)
 El sistema incluye un panel de control interactivo en `ui.py`.
@@ -26,9 +27,10 @@ La arquitectura está dockerizada para su rápido despliegue en un VPS (ej. Digi
 
 ## 🌍 Arquitectura Multi-Idioma (Eficiencia de Costos)
 Para maximizar el alcance global minimizando el gasto en APIs:
-- **Paso 1**: Se genera **1 solo video mudo** de alta calidad pagando la API de Kling una única vez.
-- **Paso 2**: El LLM redacta 8 guiones adaptados culturalmente en 1 sola llamada (ES 🇪🇸, ES_LATAM 🇦🇷, ES_MX 🇲🇽, EN, PT, DE, FR, IT). Cada idioma genera su propia palabra clave nativa (ej: OFERTA, OFFER, ANGEBOT). Para las variantes de español, el LLM adapta modismos, conjugaciones (voseo rioplatense para Argentina, tuteo peninsular para España, tuteo mexicano para México) y tono cultural.
-- **Paso 3**: Se generan 8 audios distintos con voces nativas por variante y se renderizan 8 Reels finales usando el mismo video base mudo.
+- **Paso 1**: El LLM genera un **paquete híbrido**: un guion guía (~40 palabras) + 2 prompts de B-Roll para Text-to-Video.
+- **Paso 2**: Se generan **3 clips mudos en paralelo** pagando la API de Kling: 1 I2V (foto del producto con cámara estática) + 2 T2V (B-Rolls dinámicos generados desde los prompts del LLM).
+- **Paso 3**: El LLM redacta 8 guiones adaptados culturalmente en 1 sola llamada, usando el guion guía como referencia de estructura (ES 🇪🇸, ES_LATAM 🇦🇷, ES_MX 🇲🇽, EN, PT, DE, FR, IT). Cada idioma genera su propia palabra clave nativa (ej: OFERTA, OFFER, ANGEBOT).
+- **Paso 4**: Se generan 8 audios distintos con voces nativas por variante y se renderizan 8 Reels finales concatenando los 3 clips (con Ken Burns en el I2V) + audio + subtítulos.
 
 ## 🔗 Flujo de Trabajo Diferido (Añadir Links Después)
 El sistema está diseñado para que puedas probar el contenido sin necesidad de tener las cuentas de afiliado aprobadas desde el día uno.
@@ -57,4 +59,4 @@ Además, el bot no solo manda el DM en privado, sino que hace un `POST` público
 El orquestador de IA cuenta con validaciones estrictas antes de gastar saldo en las APIs:
 - Verifica el balance de caracteres en ElevenLabs.
 - Valida los tokens de OpenAI y Kling AI mediante endpoints ligeros.
-- **Sistema de Checkpoints**: Si un producto ya generó el video base mudo en Kling AI y el proceso se interrumpió, al volver a lanzar el pipeline, el orquestador recuperará el video existente desde la base de datos saltándose la generación y evitando cobros dobles, retomando la ejecución desde la fase de doblaje (ElevenLabs).
+- **Sistema de Checkpoints**: Si un producto ya generó los 3 clips mudos en Kling AI y el proceso se interrumpió, al volver a lanzar el pipeline, el orquestador recuperará los clips existentes desde la base de datos saltándose la generación y evitando cobros dobles, retomando la ejecución desde la fase de doblaje (ElevenLabs).

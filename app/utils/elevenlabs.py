@@ -106,10 +106,20 @@ async def generate_tts(
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(url, json=payload, headers=headers, timeout=60.0)
-            if response.status_code != 200:
-                logger.error(f"[TTS] Error de ElevenLabs ({response.status_code}): {response.text}")
-            response.raise_for_status()
+            max_retries = 3
+            for attempt in range(max_retries):
+                response = await client.post(url, json=payload, headers=headers, timeout=60.0)
+                if response.status_code == 429 and attempt < max_retries - 1:
+                    wait_time = 5 * (attempt + 1)
+                    logger.warning(f"[TTS] Rate limit de ElevenLabs (429). Reintentando en {wait_time}s... (Intento {attempt + 1}/{max_retries})")
+                    import asyncio
+                    await asyncio.sleep(wait_time)
+                    continue
+                
+                if response.status_code != 200:
+                    logger.error(f"[TTS] Error de ElevenLabs ({response.status_code}): {response.text}")
+                response.raise_for_status()
+                break
 
             with open(audio_path, "wb") as f:
                 f.write(response.content)
@@ -167,10 +177,20 @@ async def generate_tts_with_timestamps(
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(url, json=payload, headers=headers, timeout=60.0)
-            if response.status_code != 200:
-                logger.error(f"[TTS+Timestamps] Error ({response.status_code}): {response.text}")
-            response.raise_for_status()
+            max_retries = 3
+            for attempt in range(max_retries):
+                response = await client.post(url, json=payload, headers=headers, timeout=60.0)
+                if response.status_code == 429 and attempt < max_retries - 1:
+                    wait_time = 5 * (attempt + 1)
+                    logger.warning(f"[TTS+Timestamps] Rate limit de ElevenLabs (429). Reintentando en {wait_time}s... (Intento {attempt + 1}/{max_retries})")
+                    import asyncio
+                    await asyncio.sleep(wait_time)
+                    continue
+                
+                if response.status_code != 200:
+                    logger.error(f"[TTS+Timestamps] Error ({response.status_code}): {response.text}")
+                response.raise_for_status()
+                break
 
             data = response.json()
 

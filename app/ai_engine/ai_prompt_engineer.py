@@ -1,15 +1,15 @@
 """
-AI Prompt Engineer — El cerebro creativo del Pipeline B.
+AI Prompt Engineer — El cerebro creativo del Pipeline Híbrido I2V + T2V.
 
 Usa un LLM (OpenAI) con un System Prompt ultra-detallado para convertir
-la información de un producto en un prompt de video hipnótico y adictivo
-optimizado para APIs de generación de video IA (Runway, Kling, Luma, etc).
+la información de un producto en un paquete de prompts optimizado:
+  - script: Guion locutado corto (~40 palabras, ~15 seg) con vacío de curiosidad.
+  - b_roll_1: Prompt T2V para una escena sensorial/estética relacionada al producto.
+  - b_roll_2: Prompt T2V para el producto en uso en cámara lenta (macro shot).
 
-Las reglas de generación siguen el framework de "Faceless Marketing Viral":
-  - Discrepancia Visual (fotorrealismo + interacción hipnótica)
-  - Cinematografía para Retención (slow-mo, extreme macro)
-  - Iluminación Cinemática (volumetric light, texturas hiper-detalladas)
-  - Formato 9:16 vertical para Instagram Reels
+El clip principal (I2V) usa la foto real del producto con cámara estática;
+los B-Rolls se generan con Text-to-Video para evitar deformación de píxeles
+y mantener variedad visual que maximiza la retención.
 """
 
 import os
@@ -26,139 +26,94 @@ client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ─── Modelo de Respuesta Estructurada ────────────────────────────────────────
 
-class AIVideoPrompt(BaseModel):
-    """Estructura del prompt de video generado por el LLM."""
+class HybridVideoPrompt(BaseModel):
+    """Estructura del prompt híbrido generado por el LLM."""
 
-    video_prompt: str = Field(
+    script: str = Field(
         description=(
-            "The complete, detailed video generation prompt in English. "
-            "Must describe the exact visual scene, camera movement, lighting, "
-            "object interactions, and cinematic style. Ready to be sent directly "
-            "to a video generation API (Runway, Kling, Luma, etc)."
+            "Short voiceover script (~40 words, ~15 seconds of audio) in Spanish. "
+            "Must open with a curiosity gap (a provocative question or problem statement) "
+            "that hooks the viewer. NEVER mention the product price. "
+            "Must end with a soft tease that makes the viewer want to comment for more info."
+        )
+    )
+    b_roll_1: str = Field(
+        description=(
+            "English prompt for Kling AI Text-to-Video. A highly aesthetic, sensorial, "
+            "or tempting cinematic scene RELATED to the product category but NOT showing "
+            "the product itself. No text, no logos, no brands. "
+            "Example for a coffee maker: 'Extreme close-up of golden flaky croissants "
+            "being pulled apart in slow motion with steam rising, warm morning light, "
+            "shallow depth of field, 9:16 vertical, cinematic.'"
+        )
+    )
+    b_roll_2: str = Field(
+        description=(
+            "English prompt for Kling AI Text-to-Video. A macro/slow-motion shot showing "
+            "the type of product IN USE (generic, not branded). Focus on the satisfying "
+            "action or result of using the product. No text, no logos, no brands. "
+            "Example for a coffee maker: 'Macro shot of dark espresso coffee pouring into "
+            "a white ceramic cup in extreme slow motion, steam curling upward, "
+            "cinematic studio lighting, 9:16 vertical, ultra realistic.'"
         )
     )
     scene_description: str = Field(
         description=(
-            "A brief human-readable description of the visual concept in Spanish "
+            "Brief human-readable description of the overall visual concept in Spanish "
             "for logging and review purposes."
         )
     )
-    suggested_duration: float = Field(
-        default=4.0,
-        description=(
-            "Suggested duration in seconds for each video clip (between 3 and 5 seconds). "
-            "Shorter is better for looping and retention."
-        )
-    )
-    camera_movement: str = Field(
-        description=(
-            "The primary camera movement described in English "
-            "(e.g., 'slow upward pan', 'smooth orbit', 'extreme macro push-in')."
-        )
-    )
-    num_clips: int = Field(
-        default=2,
-        description=(
-            "Number of distinct video clips to generate (2-3 clips that will be "
-            "concatenated for the final Reel). Each clip shows a different angle "
-            "or moment of the product."
-        )
-    )
-    clip_prompts: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Individual prompts for each clip if num_clips > 1. Each prompt is a "
-            "variation of the main concept showing a different angle, moment, or "
-            "detail of the product. All in English."
-        )
-    )
 
 
-# ─── System Prompt de Generación Adictiva ─────────────────────────────────────
+# ─── System Prompt de Marketing de Afiliación para Instagram ─────────────────
 
-VIRAL_VIDEO_SYSTEM_PROMPT = """You are a world-class AI Video Prompt Engineer specialized in creating HYPNOTIC, ADDICTIVE visual content for Instagram Reels in the "Faceless Marketing" style.
+HYBRID_VIDEO_SYSTEM_PROMPT = """You are a world-class Instagram Reels strategist and affiliate marketing expert specialized in RETENTION OPTIMIZATION for faceless product accounts.
 
-Your job: Take a product description and a reference product photo, then generate an incredibly detailed video generation prompt (in English) that will produce a mesmerizing, scroll-stopping video clip.
+Your job: Given a product description and photo, generate a structured JSON response with 3 components designed to MAXIMIZE watch-time and comment-driven engagement.
 
 ═══════════════════════════════════════════════════════════════
-STRICT RULES — EVERY PROMPT YOU GENERATE MUST FOLLOW ALL OF THESE:
+THE HYBRID VISUAL STRATEGY (Why 3 Clips, Not 1)
 ═══════════════════════════════════════════════════════════════
 
-## 1. VISUAL DISCREPANCY EFFECT (The "Uncanny Satisfaction")
-- The product MUST look 100% PHOTOREALISTIC — indistinguishable from a real photograph.
-- BUT the product must INTERACT with its environment in a subtly HYPNOTIC, IMPOSSIBLE, or deeply SATISFYING way:
-  * Subtle levitation (floating 2-3cm above a surface with soft shadow underneath)
-  * Perfect fluid physics (honey dripping with impossibly perfect viscosity, water splitting around the object in slow motion)
-  * ASMR-style precision cuts (a blade slicing through something with surgical perfection, revealing a cross-section)
-  * Magnetic-like attraction (small particles or ingredients gravitating slowly toward the product)
-  * Infinite loop physics (an action that seamlessly repeats — pouring, spinning, assembling)
-- The discrepancy between "this looks real" and "this can't be real" is what keeps viewers watching.
+Instagram's algorithm rewards watch-time above all. A single looping clip causes "visual fatigue" and users scroll away. Instead, we use 3 DISTINCT clips:
 
-## 2. CINEMATOGRAPHY FOR MAXIMUM RETENTION
-- Camera movements must be EXTREMELY SLOW and FLUID. Think: cinematic slow-motion at 0.25x speed.
-- MANDATORY camera styles (pick the most appropriate for each clip):
-  * **Smooth slow-mo orbit**: Camera slowly orbits 180° around the product at eye level
-  * **Extreme macro push-in**: Start from a medium shot, slowly push into an extreme close-up of a texture or detail
-  * **Top-down slow descent**: Bird's-eye view slowly descending toward the product
-  * **Dolly zoom (Vertigo effect)**: Background compresses while the product stays the same size
-  * **Slow upward pan**: Start from the base/shadow, slowly reveal the full product upward
-- NEVER use fast cuts, shaky camera, or abrupt transitions.
-- Use EXTREME MACRO and TIGHT CLOSE-UP shots to:
-  * Avoid AI inconsistencies in backgrounds and wide shots
-  * Force the viewer's eye to the product's textures and details
-  * Create intimate, ASMR-like visual proximity
+1. **HERO CLIP (I2V)**: The actual product photo transformed into video with a LOCKED camera. This clip will be enhanced with a slow Ken Burns zoom effect in post-production, so your prompt must describe a STATIC, locked-off composition. The product must be the clear hero.
 
-## 3. LIGHTING (Cinematic Studio Quality)
-- ALWAYS specify: "Cinematic studio lighting with volumetric light rays"
-- Key lighting setups to reference:
-  * Three-point lighting with a dominant warm key light
-  * Volumetric god rays cutting through subtle haze/mist
-  * Dramatic rim lighting that outlines the product silhouette
-  * Soft caustic reflections on glossy/metallic surfaces
-- Textures must be HYPER-DETAILED:
-  * Glossy surfaces with perfect specular highlights
-  * Metallic finishes with anisotropic reflections
-  * Matte surfaces with visible micro-texture (fabric weave, brushed metal, paper grain)
-  * Pristine, dust-free, showroom-quality appearance
+2. **B-ROLL 1 (T2V - Sensorial/Aspirational)**: A highly aesthetic, ASMR-like, or aspirational scene that evokes the FEELING of the product category. This is NOT the product itself — it's the world around it. Think: the croissant for the coffee maker, the sunset for the sunglasses, the fresh ingredients for the kitchen gadget.
 
-## 4. FORMAT SPECIFICATIONS
-- ALWAYS specify in the prompt: "Vertical 9:16 aspect ratio"
-- ALWAYS specify: "4-5 second duration"
-- ALWAYS add: "Seamless loop" or "perfect loop ending" when the visual concept allows it
-- Background should be MINIMAL: solid dark gradient, clean studio backdrop, or very shallow depth of field that blurs everything behind the product
-- The product MUST occupy at least 60% of the frame
+3. **B-ROLL 2 (T2V - Product-in-Use)**: A satisfying macro/slow-motion shot of the GENERIC type of product being used. Show the ACTION, the RESULT, the SATISFACTION. This creates the "I want that" moment.
 
-## 5. PROMPT STRUCTURE (Follow this template for each clip)
-Your video prompt must follow this structure for maximum effectiveness with AI video models:
-```
-[Camera Movement], [Subject Description doing Hypnotic Action], [Environment/Background], [Lighting Setup], [Texture/Material Details], [Format Specs]. [Style References].
-```
+═══════════════════════════════════════════════════════════════
+RULES FOR THE VOICEOVER SCRIPT
+═══════════════════════════════════════════════════════════════
 
-Example:
-"Smooth slow-motion orbit shot, a pristine stainless steel mandoline slicer floating 3cm above a dark marble countertop with a single tomato being sliced in perfect cross-sections falling in slow motion beneath it, minimal dark studio background with shallow depth of field, cinematic three-point lighting with volumetric warm light rays cutting through subtle kitchen steam, hyper-detailed brushed metal texture with perfect specular highlights on the blade edge, vertical 9:16 aspect ratio, 5-second seamless loop. Shot on RED Komodo, Masterful product photography style."
+- Language: Spanish (neutral Latin American).
+- Length: MAXIMUM 40 words (~15 seconds when spoken).
+- Structure: 
+  * Open with a CURIOSITY GAP — a provocative question or bold claim about a common problem.
+  * Bridge with the solution hint — "there's something that..." or "what if I told you..."
+  * Close with a SOFT CTA tease — imply they need to comment to find out more.
+- STRICT RULES:
+  * NEVER mention the product name directly.
+  * NEVER mention the price.
+  * NEVER use emojis (this will be read by TTS).
+  * NO hashtags, NO @ mentions.
+  * Write in a conversational, fast-paced tone.
 
-## 6. MULTI-CLIP STRATEGY
-When generating multiple clips for a single Reel:
-- Clip 1: HERO SHOT — The most visually striking angle, establishes the product
-- Clip 2: DETAIL SHOT — Extreme macro on a key feature or texture
-- Clip 3 (optional): ACTION SHOT — The product performing its function in a satisfying way
-- Each clip should feel like it belongs to the same visual universe (consistent lighting, color grade)
+═══════════════════════════════════════════════════════════════
+RULES FOR B-ROLL PROMPTS (T2V)
+═══════════════════════════════════════════════════════════════
 
-REMEMBER: You are NOT describing a real video. You are writing a PROMPT that an AI video generation model will interpret. Be specific about what should happen visually. Do NOT include text, logos, or UI elements in the video — those are added in post-production.
+Both b_roll_1 and b_roll_2 prompts must:
+- Be written in ENGLISH (this goes directly to Kling AI).
+- Specify "9:16 vertical aspect ratio" and "5-second duration".
+- Include "ultra realistic, cinematic lighting" quality markers.
+- NEVER include text, logos, brand names, or UI elements.
+- NEVER include humans with visible faces (faceless content only).
+- Describe SPECIFIC textures, materials, and atmospheric elements.
+- Use terms like: "extreme close-up", "macro shot", "slow motion", "shallow depth of field", "cinematic studio lighting", "volumetric light".
 
-## 7. CRITICAL: PRODUCT PHOTO CONTEXT TRANSFORMATION
-The product photo you receive will almost ALWAYS have a plain WHITE or NEUTRAL background (typical of marketplace listings like MercadoLibre, Amazon, AliExpress). Your prompt MUST:
-- NEVER keep the white/plain background. The video must show the product in a REAL-WORLD CONTEXT.
-- ALWAYS describe a rich, contextual environment appropriate for the product category:
-  * Kitchen products → dark marble countertop, wooden cutting board, kitchen steam, fresh ingredients nearby
-  * Beauty/skincare → bathroom vanity with soft lighting, water droplets, dewy surfaces
-  * Tech/gadgets → sleek dark desk setup, subtle LED ambient lighting, minimalist workspace
-  * Fitness → gym environment, concrete textures, dramatic side lighting
-  * Fashion → lifestyle setting, natural light, urban backdrop with bokeh
-  * General → dark studio environment with dramatic lighting and shallow depth of field
-- The AI video model will use the product photo as a visual reference for the OBJECT ITSELF, but your prompt controls the ENVIRONMENT, LIGHTING, and ACTION around it.
-- Think of it as: "Take this product OUT of its boring white catalog photo and DROP IT into a cinematic, aspirational scene."
-- Be extremely specific about the surface/background materials (marble, wood, concrete, fabric) and atmospheric elements (steam, mist, water droplets, floating particles)."""
+REMEMBER: You are writing PROMPTS for an AI video model, not describing a real video. Be ultra-specific about what should appear visually."""
 
 
 # ─── Función Principal ────────────────────────────────────────────────────────
@@ -168,80 +123,65 @@ async def generate_video_prompt(
     product_features: str,
     image_url: str | None = None,
     price: float | None = None,
-    num_clips: int = 2,
-    strategy: str = "problem_first",
-) -> AIVideoPrompt:
+    **kwargs,
+) -> HybridVideoPrompt:
     """
-    Genera un prompt de video hipnótico y adictivo usando el LLM.
+    Genera un paquete de prompts híbrido (script + 2 B-Rolls) usando el LLM.
 
-    Toma la información del producto (título, características, foto) y genera
-    un prompt optimizado para APIs de generación de video IA.
+    Toma la información del producto y genera:
+    - Un guion locutado corto con vacío de curiosidad (~40 palabras).
+    - Dos prompts de B-Roll para Text-to-Video en Kling AI.
 
     Args:
         product_title: Nombre/título del producto.
         product_features: Características y descripción del producto.
-        image_url: URL de la foto real del producto (del scraper).
-        price: Precio del producto (contexto opcional).
-        num_clips: Número de clips de video a generar (2-3).
-        strategy: 'product_first' (muestra el producto) o 'problem_first' (solo el problema).
+        image_url: URL de la foto real del producto (para contexto).
+        price: Precio del producto (contexto, pero el LLM tiene prohibido mencionarlo).
 
     Returns:
-        AIVideoPrompt con el prompt del video y metadatos.
+        HybridVideoPrompt con script, b_roll_1, b_roll_2 y scene_description.
     """
-    # Construir el user prompt con toda la información del producto
     image_context = ""
     if image_url:
-        image_context = f"\nProduct Reference Photo URL: {image_url}"
+        image_context = f"\nProduct Reference Photo: {image_url}"
 
     price_context = ""
     if price:
-        price_context = f"\nPrice: ${price}"
+        price_context = f"\nPrice (DO NOT mention in script): ${price}"
 
-    user_prompt = f"""Generate a hypnotic video prompt for this product:
+    user_prompt = f"""Generate a hybrid video prompt package for this product:
 
 Product Name: {product_title}
 Product Description/Features: {product_features}{price_context}{image_context}
 
-Number of clips needed: {num_clips}
-Strategy mode: {strategy}
-
-"""
-    if strategy == "problem_first":
-        user_prompt += """
-Since the strategy is 'problem_first', DO NOT show the exact product in the video.
-Instead, create a CURIOSITY GAP. Focus the visual scene on the PROBLEM that the product solves, or a highly satisfying abstract/lifestyle scene related to the result.
-Make the viewer wonder "What is the secret tool they are using?". Keep the actual tool hidden, out of frame, or ambiguous.
-"""
-    else:
-        user_prompt += """
-Since the strategy is 'product_first', focus on making the specific product look IRRESISTIBLE through cinematic visual storytelling. Show the product clearly.
+Create the most ADDICTIVE, scroll-stopping combination of:
+1. A short voiceover script (~40 words) with a curiosity gap
+2. A sensorial/aspirational B-Roll scene (b_roll_1)
+3. A product-in-use macro shot B-Roll scene (b_roll_2)
 """
 
-    user_prompt += f"\nCreate the most visually ADDICTIVE, scroll-stopping video concept possible.\nGenerate {num_clips} distinct clip prompts that work together as a cohesive Reel."
-
-    logger.info(f"[AI Prompt] Generando prompt de video para: {product_title}")
+    logger.info(f"[AI Prompt] Generando prompt híbrido para: {product_title}")
 
     try:
         response = await client.beta.chat.completions.parse(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": VIRAL_VIDEO_SYSTEM_PROMPT},
+                {"role": "system", "content": HYBRID_VIDEO_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            response_format=AIVideoPrompt,
+            response_format=HybridVideoPrompt,
         )
 
         result = response.choices[0].message.parsed
 
         logger.info(
-            f"[AI Prompt] Prompt generado exitosamente | "
+            f"[AI Prompt] Prompt híbrido generado | "
             f"Escena: {result.scene_description} | "
-            f"Clips: {result.num_clips} | "
-            f"Cámara: {result.camera_movement}"
+            f"Script ({len(result.script.split())} palabras)"
         )
 
         return result
 
     except Exception as e:
-        logger.error(f"[AI Prompt] Error generando prompt de video: {e}")
+        logger.error(f"[AI Prompt] Error generando prompt híbrido: {e}")
         raise

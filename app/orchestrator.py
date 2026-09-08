@@ -25,7 +25,7 @@ from app.llm.script_generator import (
     LANGUAGE_MAP,
 )
 from app.ai_engine.ai_prompt_engineer import generate_video_prompt
-from app.ai_engine.ai_video_generator import generate_ai_video_batch
+from app.ai_engine.ai_video_generator import generate_hybrid_clips
 from app.utils.elevenlabs import generate_tts_with_timestamps, resolve_voice_for_language
 from app.render.viral_renderer import render_viral_video
 
@@ -139,15 +139,18 @@ async def _run_pipeline_ai(
     languages: list[str],
 ) -> dict:
     """
-    Pipeline: 1 video mudo de Kling → N reels finales multi-idioma.
+    Pipeline Híbrido: 3 clips IA (1 I2V + 2 T2V) → N reels finales multi-idioma.
 
     Flujo:
-      1. LLM genera prompt hipnótico de video (ai_prompt_engineer)
-      2. Kling API genera 1 video mudo (image-to-video)           ┐
+      1. LLM genera paquete híbrido (script + b_roll_1 + b_roll_2)
+      2. Kling API genera 3 clips en paralelo:                    ┐
+         - I2V: foto del producto con cámara estática              │
+         - T2V: B-Roll sensorial/aspiracional                      │
+         - T2V: B-Roll del producto en uso (macro)                 │
       3. LLM genera guiones en N idiomas en una sola llamada      ┘ en paralelo
       4. Para cada idioma (en paralelo, sesiones DB independientes):
          a. ElevenLabs TTS genera audio CON timestamps (voz nativa)
-         b. Viral renderer compone el Reel final
+         b. Viral renderer compone el Reel final (3 clips + Ken Burns + audio + subtítulos)
          c. Se crea un registro Video en la DB
 
     Cada tarea de idioma instancia su propia SessionLocal()
@@ -163,23 +166,32 @@ async def _run_pipeline_ai(
     existing_videos = db_check.query(Video).filter(Video.product_id == product_id).all()
     db_check.close()
     
-    ai_clips_paths = []
+    clip_paths = {}  # dict con claves i2v, b_roll_1, b_roll_2
     ai_prompt_used = ""
-    camera_used = ""
+    script_guide = ""
     
     for v in existing_videos:
         if v.base_video_path:
             try:
-                paths = json.loads(v.base_video_path)
-                if paths:
-                    ai_clips_paths = paths
+                saved = json.loads(v.base_video_path)
+                if isinstance(saved, dict) and saved:
+                    clip_paths = saved
+                    ai_prompt_used = v.ai_video_prompt or "Recuperado de DB"
+                    break
+                elif isinstance(saved, list) and saved:
+                    # Legacy: convertir lista a dict
+                    clip_paths = {"i2v": saved[0]}
+                    if len(saved) > 1:
+                        clip_paths["b_roll_1"] = saved[1]
+                    if len(saved) > 2:
+                        clip_paths["b_roll_2"] = saved[2]
                     ai_prompt_used = v.ai_video_prompt or "Recuperado de DB"
                     break
             except Exception:
                 pass
 
-    if ai_clips_paths:
-        logger.info(f"[Pipeline] ♻️ CHECKPOINT: Video base de Kling ya existe. Omitiendo generación de video IA.")
+    if clip_paths:
+        logger.info(f"[Pipeline] ♻️ CHECKPOINT: Clips de Kling ya existen ({len(clip_paths)} clips). Omitiendo generación de video IA.")
         # Aún necesitamos los scripts
         lang_scripts = await generate_multilang_scripts(
             title=product_data["title"],
@@ -190,27 +202,35 @@ async def _run_pipeline_ai(
             languages=languages,
         )
     else:
-        # ── 2. Generar Video IA + Guiones Multi-Idioma en Paralelo ────────────
-        logger.info(f"[Pipeline] Generando prompt de video IA para producto {product_id}")
+        # ── 2. Generar Prompt Híbrido ─────────────────────────────────────────
+        logger.info(f"[Pipeline] Generando prompt híbrido para producto {product_id}")
         ai_prompt = await generate_video_prompt(
             product_title=product_data["title"],
             product_features=product_data["features"],
             image_url=product_data["image_url"],
             price=product_data["price"],
-            num_clips=2,
-            strategy="product_first",
         )
         ai_prompt_used = ai_prompt.scene_description
-        camera_used = getattr(ai_prompt, "camera_movement", "")
-        clip_prompts = ai_prompt.clip_prompts if getattr(ai_prompt, "clip_prompts", None) else [ai_prompt.video_prompt]
+        script_guide = ai_prompt.script
 
-        logger.info(f"[Pipeline] Lanzando {len(clip_prompts)} clips IA + guiones en paralelo...")
-        video_task = generate_ai_video_batch(
-            prompts=clip_prompts,
+        # ── 3. Lanzar 3 Clips Kling + Guiones Multi-Idioma en Paralelo ────────
+        logger.info(f"[Pipeline] Lanzando 3 clips híbridos (I2V + 2 T2V) + guiones en paralelo...")
+
+        # Prompt I2V: escena estática del producto (el Ken Burns se aplica en post)
+        i2v_prompt = (
+            f"Product hero shot: {product_data['title']}. "
+            f"Cinematic studio lighting, dark background, shallow depth of field. "
+            f"9:16 vertical, 5 seconds, ultra realistic."
+        )
+
+        video_task = generate_hybrid_clips(
+            i2v_prompt=i2v_prompt,
+            b_roll_1_prompt=ai_prompt.b_roll_1,
+            b_roll_2_prompt=ai_prompt.b_roll_2,
             video_id=product_id,
             image_url=product_data["image_url"],
             aspect_ratio="9:16",
-            duration=getattr(ai_prompt, "suggested_duration", 5),
+            duration=5.0,
         )
         scripts_task = generate_multilang_scripts(
             title=product_data["title"],
@@ -219,10 +239,11 @@ async def _run_pipeline_ai(
             rating=product_data["rating"],
             reviews_count=product_data["reviews_count"],
             languages=languages,
+            script_guide=script_guide,
         )
 
-        ai_clips_paths, lang_scripts = await asyncio.gather(video_task, scripts_task)
-        logger.info(f"[Pipeline] Video IA generado ({len(ai_clips_paths)} clips) + {len(lang_scripts)} guiones.")
+        clip_paths, lang_scripts = await asyncio.gather(video_task, scripts_task)
+        logger.info(f"[Pipeline] {len(clip_paths)} clips IA generados + {len(lang_scripts)} guiones.")
 
     # ── Paso 3: Para cada idioma → TTS + Render + DB (en paralelo) ────────────
 
@@ -256,8 +277,8 @@ async def _run_pipeline_ai(
             video.keywords = json.dumps(lang_script.keywords)
             video.engine = "ai"
             video.ai_video_prompt = ai_prompt_used
-            video.base_video_path = json.dumps(ai_clips_paths)
-            video.stock_videos_paths = json.dumps(ai_clips_paths)
+            video.base_video_path = json.dumps(clip_paths)
+            video.stock_videos_paths = json.dumps(clip_paths)
             
             if not video.status or video.status == ContentStatus.PENDING:
                 video.status = ContentStatus.SCRIPT_GENERATED
@@ -288,7 +309,7 @@ async def _run_pipeline_ai(
             # ── Renderizar reel viral ─────────────────────────────────────
             final_path = await render_viral_video(
                 video_id=video.id,
-                ai_clips_paths=ai_clips_paths,
+                ai_clips_paths=clip_paths,
                 audio_path=audio_path,
                 hook_text=video.call_to_action or video.hook or "",
                 word_timestamps=word_timestamps,
@@ -362,9 +383,8 @@ async def _run_pipeline_ai(
             f"({len(failed)} errores)"
         ),
         "data": {
-            "ai_clips_count": len(ai_clips_paths),
+            "ai_clips_count": len(clip_paths),
             "ai_prompt_used": ai_prompt_used,
-            "camera_movement": camera_used,
             "reels": successful,
             "errors": failed,
         },
