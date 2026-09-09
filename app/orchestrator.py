@@ -355,9 +355,16 @@ async def _run_pipeline_ai(
         finally:
             db.close()
 
-    # Ejecutar todos los idiomas en paralelo
+    # Usar un semáforo para limitar la concurrencia y evitar el Rate Limit de ElevenLabs (HTTP 429)
+    semaphore = asyncio.Semaphore(2)
+
+    async def _process_language_with_semaphore(lang_script):
+        async with semaphore:
+            return await _process_language(lang_script)
+
+    # Ejecutar todos los idiomas en paralelo pero controlados por el semáforo
     lang_results = await asyncio.gather(
-        *[_process_language(script) for script in lang_scripts],
+        *[_process_language_with_semaphore(script) for script in lang_scripts],
         return_exceptions=True,
     )
 
