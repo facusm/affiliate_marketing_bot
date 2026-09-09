@@ -212,7 +212,7 @@ erDiagram
 | `reviews_count`| `int` | `null` | Cantidad de reseñas |
 
 **Archivo Subido (`File`):**
-- `image`: Archivo físico de la imagen (PNG, JPG, WEBP). Se le aplica un **Auto-Crop inteligente a 9:16** (Pillow) y se redimensiona a 1080x1920 antes de guardarse localmente para enviarse a Kling.
+- `image`: Archivo físico de la imagen (PNG, JPG, WEBP) ya **recortada manualmente a 9:16 en el frontend** (usando `streamlit-cropper`). El backend asume este encuadre y únicamente fuerza un resize a 1080x1920 (Pillow) para cumplir con el estándar de Kling.
 
 **Query Params:**
 | Param      | Tipo   | Default                       | Descripción                                          |
@@ -299,7 +299,7 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    A["📥 POST /pipeline/run (multipart)"] --> B["Auto-Crop 9:16 (Pillow) y guardar imagen local"]
+    A["📥 POST /pipeline/run (multipart)"] --> B["Resize forzado a 1080x1920 (Pillow) y guardar imagen local"]
     B --> PB1["LLM: generate_video_prompt() → HybridVideoPrompt"]
     
     PB1 --> PB2["Paso 2+3 en PARALELO"]

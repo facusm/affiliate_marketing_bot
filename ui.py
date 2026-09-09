@@ -11,6 +11,9 @@ Ejecutar con:
 import streamlit as st
 import requests
 import os
+import io
+from PIL import Image
+from streamlit_cropper import st_cropper
 
 # ─── Configuración ────────────────────────────────────────────────────────────
 
@@ -84,14 +87,20 @@ with tab1:
         st.divider()
         st.subheader("📸 Foto del Producto")
 
-        image = st.file_uploader(
+        image_file = st.file_uploader(
             "Subí la foto del producto *",
             type=["png", "jpg", "jpeg", "webp"],
             help="La foto se usará como referencia para generar el video IA con Kling.",
         )
 
-        if image:
-            st.image(image, caption="Vista previa", width=250)
+        cropped_image = None
+        if image_file:
+            st.write("Encuadra la imagen (Formato 9:16):")
+            img = Image.open(image_file)
+            cropped_image = st_cropper(img, aspect_ratio=(9, 16), box_color='#FF0000', return_type='image')
+            
+            if cropped_image:
+                st.image(cropped_image, caption="Vista previa", width=250)
 
         st.divider()
         st.subheader("🌍 Idiomas")
@@ -117,8 +126,8 @@ with tab1:
         errors = []
         if not title.strip():
             errors.append("El **título** es obligatorio.")
-        if not image:
-            errors.append("La **foto del producto** es obligatoria.")
+        if not cropped_image:
+            errors.append("La **foto del producto recortada** es obligatoria.")
         if not languages:
             errors.append("Seleccioná al menos un **idioma**.")
 
@@ -141,8 +150,13 @@ with tab1:
             if affiliate_url.strip():
                 form_data["affiliate_url"] = affiliate_url.strip()
 
+            # Convertir imagen recortada a bytes
+            img_byte_arr = io.BytesIO()
+            cropped_image.save(img_byte_arr, format='JPEG')
+            img_bytes = img_byte_arr.getvalue()
+
             files = {
-                "image": (image.name, image.getvalue(), image.type),
+                "image": (image_file.name if image_file else "image.jpg", img_bytes, "image/jpeg"),
             }
 
             params = {
