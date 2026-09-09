@@ -76,6 +76,7 @@ async def generate_video_script(
     4. Keywords Visuales: Genera palabras clave SIEMPRE EN INGLÉS que describan visualmente el problema o la solución. Se usarán para buscar clips de stock de fondo (ej: 'person tired cleaning', 'satisfying slicing').
     
     MUY IMPORTANTE: 
+    - CRITICAL: The final script MUST be under 30 words in total. It must result in less than 12 seconds of spoken audio. Do not write polite intros, jump directly into the aggressive hook.
     - NO uses emojis en los campos de texto, ya que este guion será leído por una IA de Text-To-Speech (ElevenLabs).
     - La palabra clave del CTA debe ser UNA SOLA PALABRA, corta, directa y en mayúsculas.
     - EL CONTENIDO DEBE ESTAR TRADUCIDO Y ADAPTADO CULTURALMENTE AL IDIOMA: {language}.
@@ -158,6 +159,7 @@ SPANISH REGIONAL VARIANTS — FOLLOW STRICTLY:
 - "es_latam" = Argentine Rioplatense Spanish. It is MANDATORY to use voseo throughout ("vos tenés", "vos sabés", "comentá", "mirá"). Use natural Argentine modismos ("re copado", "bárbaro", "posta", "mortal"). Orient the copy to an Argentine audience that buys products with international shipping. The CTA MUST use the voseo imperative ("Comentá", "Escribí").
 
 CRITICAL RULES:
+- CRITICAL: The final script MUST be under 30 words in total. It must result in less than 12 seconds of spoken audio. Do not write polite intros, jump directly into the aggressive hook.
 - REGLA ESTRICTA: NUNCA menciones el precio ni el valor monetario del producto en el guion. Tu objetivo es generar curiosidad destacando el dolor que resuelve y sus beneficios. El CTA debe invitar a comentar la palabra clave única generada para este producto (cta_keyword) para recibir el enlace.
 - NO emojis in text fields (this will be read by ElevenLabs TTS).
 - The cta_keyword MUST be in the NATIVE LANGUAGE of each script and in UPPERCASE. It should be a short, product-related word that feels natural to comment in that language (e.g., Spanish: OFERTA, English: OFFER, German: ANGEBOT, Portuguese: OFERTA, French: OFFRE, Italian: OFFERTA). Each language gets its OWN keyword.

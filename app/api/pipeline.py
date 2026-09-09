@@ -13,6 +13,8 @@ El link de afiliado es OPCIONAL y puede agregarse después via PATCH /products/{
 import os
 import uuid
 import logging
+import io
+from PIL import Image
 from fastapi import APIRouter, Depends, HTTPException, Query, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from app.database.database import get_db
@@ -117,8 +119,35 @@ async def execute_pipeline(
 
         try:
             content = await image.read()
-            with open(image_path, "wb") as f:
-                f.write(content)
+            
+            # Auto-crop inteligente a 9:16 y redimensionar a 1080x1920
+            img = Image.open(io.BytesIO(content))
+            
+            # Convertir a RGB si tiene canal alfa
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+                
+            w, h = img.size
+            target_ratio = 9 / 16
+            current_ratio = w / h
+            
+            if current_ratio > target_ratio:
+                # Imagen demasiado ancha, cortar los lados
+                new_w = int(h * target_ratio)
+                offset = (w - new_w) // 2
+                img = img.crop((offset, 0, offset + new_w, h))
+            elif current_ratio < target_ratio:
+                # Imagen demasiado alta, cortar arriba y abajo
+                new_h = int(w / target_ratio)
+                offset = (h - new_h) // 2
+                img = img.crop((0, offset, w, offset + new_h))
+                
+            # Redimensionar al estándar de Reels
+            img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
+            
+            # Guardar la imagen modificada
+            img.save(image_path, format="JPEG", quality=95)
+            
         except Exception as e:
             # Rollback: borrar el producto huérfano si falla el guardado físico
             db.delete(db_product)

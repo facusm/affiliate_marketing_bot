@@ -88,12 +88,13 @@ RULES FOR THE VOICEOVER SCRIPT
 ═══════════════════════════════════════════════════════════════
 
 - Language: Spanish (neutral Latin American).
-- Length: MAXIMUM 40 words (~15 seconds when spoken).
+- Length: MAXIMUM 30 words (~12 seconds when spoken).
 - Structure: 
   * Open with a CURIOSITY GAP — a provocative question or bold claim about a common problem.
   * Bridge with the solution hint — "there's something that..." or "what if I told you..."
   * Close with a SOFT CTA tease — imply they need to comment to find out more.
 - STRICT RULES:
+  * CRITICAL: The final script MUST be under 30 words in total. It must result in less than 12 seconds of spoken audio. Do not write polite intros, jump directly into the aggressive hook.
   * NEVER mention the product name directly.
   * NEVER mention the price.
   * NEVER use emojis (this will be read by TTS).
