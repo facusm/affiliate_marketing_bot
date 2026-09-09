@@ -5,11 +5,11 @@ Un sistema automatizado que transforma la foto y los datos de un producto (ingre
 
 ## 🧠 La Receta Viral (El "Efecto Adictivo")
 El sistema no genera videos genéricos; está programado a nivel de código para maximizar la retención del usuario (watch-time) y forzar la interacción:
-1. **Arquitectura Híbrida I2V + T2V (Kling v3.0)**: En lugar de repetir un solo clip en loop, el sistema genera **3 clips distintos en paralelo**: un Hero Shot estático del producto (Image-to-Video) + 2 B-Rolls dinámicos generados por Text-to-Video (escena sensorial + producto en uso en macro). Esto elimina el aburrimiento visual por repetición.
+1. **Arquitectura Híbrida I2V + T2V (Kling v3.0)**: En lugar de repetir un solo clip en loop, el sistema genera **3 clips distintos en paralelo**: un Hero Shot estático del producto (Image-to-Video) + 2 B-Rolls dinámicos generados por Text-to-Video (escena sensorial + producto en uso en macro). Esto elimina el aburrimiento visual por repetición. Además, las imágenes subidas pasan por un **Auto-Crop inteligente a 9:16** (`Pillow`) para evitar deformaciones en Kling.
 2. **Efecto Ken Burns (Zoom Digital)**: El clip estático del producto recibe un zoom suave progresivo (1.0→1.15) frame-a-frame en post-producción, aportando dinamismo sin que la IA deforme los píxeles originales.
 3. **Subtítulos Estilo Hormozi**: El video procesa el audio palabra por palabra. Los subtítulos aparecen de forma agresiva y dinámica en el centro de la pantalla (de a 1 o 3 palabras). Esto obliga al ojo del usuario a seguir leyendo y evita que haga scroll.
 4. **Voz Nativa Acelerada (ElevenLabs)**: Se utilizan locuciones en idiomas nativos que suenan naturales, dinámicas y sin pausas largas.
-5. **Curiosity Gap (Vacío de Curiosidad)**: El LLM genera un guion corto (~40 palabras) que actúa como guía para los scripts multi-idioma, bajo REGLA ESTRICTA de nunca mencionar el precio del producto, basando el "gancho" inicial en resolver un dolor o problema. Esto maximiza la necesidad del usuario de comentar para saber más.
+5. **Curiosity Gap (Vacío de Curiosidad) y Limitación Estricta**: El LLM genera un guion ultra-corto bajo una restricción absoluta de **máximo 30 palabras** (~12 segundos), asegurando que MoviePy nunca loopee videos. Hay REGLA ESTRICTA de nunca mencionar el precio, saltar introducciones educadas y basar el "gancho" inicial en resolver un dolor o problema. Esto maximiza la retención y la necesidad de comentar.
 6. **Contraste Visual Premium**: Un filtro oscuro sutil (15% de opacidad) asegura que los subtítulos blancos y brillantes resalten a la perfección.
 7. **Fijación del CTA**: El llamado a la acción queda fijo en la pantalla, repitiéndole visualmente al cerebro qué palabra tiene que comentar.
 
@@ -27,7 +27,7 @@ La arquitectura está dockerizada para su rápido despliegue en un VPS (ej. Digi
 
 ## 🌍 Arquitectura Multi-Idioma (Eficiencia de Costos)
 Para maximizar el alcance global minimizando el gasto en APIs:
-- **Paso 1**: El LLM genera un **paquete híbrido**: un guion guía (~40 palabras) + 2 prompts de B-Roll para Text-to-Video.
+- **Paso 1**: El LLM genera un **paquete híbrido**: un guion guía estricto (< 30 palabras) + 2 prompts de B-Roll para Text-to-Video.
 - **Paso 2**: Se generan **3 clips mudos en paralelo** pagando la API de Kling: 1 I2V (foto del producto con cámara estática) + 2 T2V (B-Rolls dinámicos generados desde los prompts del LLM).
 - **Paso 3**: El LLM redacta 8 guiones adaptados culturalmente en 1 sola llamada, usando el guion guía como referencia de estructura (ES 🇪🇸, ES_LATAM 🇦🇷, ES_MX 🇲🇽, EN, PT, DE, FR, IT). Cada idioma genera su propia palabra clave nativa (ej: OFERTA, OFFER, ANGEBOT).
 - **Paso 4**: Se generan 8 audios distintos con voces nativas por variante y se renderizan 8 Reels finales concatenando los 3 clips (con Ken Burns en el I2V) + audio + subtítulos.

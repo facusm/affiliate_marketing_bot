@@ -212,7 +212,7 @@ erDiagram
 | `reviews_count`| `int` | `null` | Cantidad de reseñas |
 
 **Archivo Subido (`File`):**
-- `image`: Archivo físico de la imagen (PNG, JPG, WEBP). Se guarda localmente y se pasa en Base64 a Kling.
+- `image`: Archivo físico de la imagen (PNG, JPG, WEBP). Se le aplica un **Auto-Crop inteligente a 9:16** (Pillow) y se redimensiona a 1080x1920 antes de guardarse localmente para enviarse a Kling.
 
 **Query Params:**
 | Param      | Tipo   | Default                       | Descripción                                          |
@@ -299,7 +299,7 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    A["📥 POST /pipeline/run (multipart)"] --> B["Guardar imagen local"]
+    A["📥 POST /pipeline/run (multipart)"] --> B["Auto-Crop 9:16 (Pillow) y guardar imagen local"]
     B --> PB1["LLM: generate_video_prompt() → HybridVideoPrompt"]
     
     PB1 --> PB2["Paso 2+3 en PARALELO"]
@@ -387,7 +387,7 @@ flowchart LR
 
 | Función | Modelo Pydantic de respuesta | Prompt | Uso |
 |---------|------------------------------|--------|-----|
-| `generate_multilang_scripts()` | `MultiLangScriptResponse` → `list[LangScript]` | System prompt en inglés + reglas estrictas de *Curiosity Gap* (sin mencionar precio) + datos del producto + lista de idiomas + script_guide opcional | Generar guiones en varios idiomas |
+| `generate_multilang_scripts()` | `MultiLangScriptResponse` → `list[LangScript]` | System prompt en inglés + reglas estrictas (< 30 palabras) + datos del producto + lista de idiomas + script_guide opcional | Generar guiones en varios idiomas |
 | `generate_video_prompt()` | `HybridVideoPrompt` | `HYBRID_VIDEO_SYSTEM_PROMPT` (reglas de arquitectura híbrida I2V+T2V) + datos del producto | Paquete de prompts híbrido (script + 2 B-Rolls) |
 
 **Modelos Pydantic del LLM:**
@@ -408,7 +408,7 @@ class MultiLangScriptResponse(BaseModel):
 
 # Pipeline B — prompt híbrido de video
 class HybridVideoPrompt(BaseModel):
-    script: str           # Guion corto (~40 palabras, ~15s) con curiosity gap
+    script: str           # Guion corto (< 30 palabras, ~12s) con curiosity gap
     b_roll_1: str         # Prompt T2V: escena sensorial/aspiracional
     b_roll_2: str         # Prompt T2V: producto en uso (macro)
     scene_description: str # Descripción legible (español, para logs)
