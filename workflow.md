@@ -68,7 +68,9 @@ affiliate_marketing_bot/
 ### 1.1 Interfaz de Usuario (Streamlit)
 
 El archivo `ui.py` provee un panel interactivo dividido en dos pestañas principales (`st.tabs`):
-1. **🚀 Generar Reels**: Formulario para la ingesta de un producto nuevo (título, foto, descripción, etc.) y selección de idiomas para lanzar el pipeline completo.
+1. **🚀 Generar Reels**: Flujo en dos pasos para la ingesta de un producto nuevo.
+   - **Paso 1:** Subida y recorte interactivo de la foto a 9:16 (fuera del formulario principal para permitir re-renders dinámicos con `streamlit-cropper`).
+   - **Paso 2:** Formulario de texto (título, descripción, etc.) y selección de idiomas para lanzar el pipeline completo.
 2. **📦 Inventario de Productos**: Consume `GET /products/` para listar los productos generados, mostrando su ID, título, descripción/palabras clave (`features`), estado y cantidad de videos. Permite actualizar el link de afiliado en tiempo real consumiendo `PATCH /products/{id}/affiliate-link`.
 
 ---

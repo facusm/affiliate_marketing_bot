@@ -49,8 +49,27 @@ st.divider()
 tab1, tab2 = st.tabs(["🚀 Generar Reels", "📦 Inventario de Productos"])
 
 with tab1:
+    st.subheader("📸 Foto del Producto (Paso 1)")
+
+    image_file = st.file_uploader(
+        "Subí la foto del producto *",
+        type=["png", "jpg", "jpeg", "webp"],
+        help="La foto se usará como referencia para generar el video IA con Kling.",
+    )
+
+    cropped_image = None
+    if image_file:
+        st.write("Encuadra la imagen (Formato 9:16):")
+        img = Image.open(image_file)
+        cropped_image = st_cropper(img, aspect_ratio=(9, 16), box_color='#FF0000', return_type='image')
+        
+        if cropped_image:
+            st.image(cropped_image, caption="Vista previa", width=250)
+
+    st.divider()
+
     with st.form("product_form", clear_on_submit=False):
-        st.subheader("📦 Datos del Producto")
+        st.subheader("📦 Datos del Producto (Paso 2)")
 
         title = st.text_input(
             "Título del Producto *",
@@ -83,24 +102,6 @@ with tab1:
             "Link de Afiliado (opcional)",
             placeholder="https://tienda.mercadolibre.com.ar/...?aff=123",
         )
-
-        st.divider()
-        st.subheader("📸 Foto del Producto")
-
-        image_file = st.file_uploader(
-            "Subí la foto del producto *",
-            type=["png", "jpg", "jpeg", "webp"],
-            help="La foto se usará como referencia para generar el video IA con Kling.",
-        )
-
-        cropped_image = None
-        if image_file:
-            st.write("Encuadra la imagen (Formato 9:16):")
-            img = Image.open(image_file)
-            cropped_image = st_cropper(img, aspect_ratio=(9, 16), box_color='#FF0000', return_type='image')
-            
-            if cropped_image:
-                st.image(cropped_image, caption="Vista previa", width=250)
 
         st.divider()
         st.subheader("🌍 Idiomas")

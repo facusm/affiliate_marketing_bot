@@ -16,7 +16,8 @@ El sistema no genera videos genéricos; está programado a nivel de código para
 ## 🖥️ Interfaz de Usuario (Streamlit)
 El sistema incluye un panel de control interactivo en `ui.py`.
 - Levantá la interfaz con: `streamlit run ui.py` (o vía Docker)
-- Cargá el título, características e imagen física del producto desde el navegador.
+- **Paso 1:** Subí la foto del producto y recortala interactivamente a 9:16 desde el navegador.
+- **Paso 2:** Completá los datos de texto (título, descripción, idiomas, etc.) y generá los Reels.
 - Monitoreá la generación paralela de todos los idiomas directamente en la web.
 
 ## 🐳 Despliegue en Producción (Docker VPS)
