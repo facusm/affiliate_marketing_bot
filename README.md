@@ -4,7 +4,7 @@
 Un sistema automatizado que transforma la foto y los datos de un producto (ingresados mediante un panel web fácil de usar) en **8 Reels virales en distintos idiomas** (incluyendo 3 variantes regionales de español). El bot publica los videos automáticamente usando la Meta Graph API y usa un Webhook oficial de Instagram para **enviar mensajes directos (DMs) automáticos** con un link de afiliado a los usuarios que comentan una palabra clave específica.
 
 ## 🏗️ Arquitectura y Tecnologías
-Este proyecto es un pipeline end-to-end asíncrono construido con FastAPI, base de datos PostgreSQL, interfaz gráfica con Streamlit, e integración con LLMs (OpenAI), ElevenLabs (TTS) y MoviePy para el renderizado. Todo el entorno está 100% contenerizado en Docker, resolviendo dependencias complejas de sistema (ImageMagick).
+Este proyecto es un pipeline end-to-end asíncrono construido con FastAPI, base de datos PostgreSQL, interfaz gráfica con Streamlit, e integración con LLMs (OpenAI), ElevenLabs (TTS) y MoviePy para el renderizado. Todo el entorno está 100% contenerizado en Docker, resolviendo dependencias complejas de sistema (ImageMagick). Adicionalmente, el entorno está preparado para pruebas locales gratuitas configurando `AI_VIDEO_PROVIDER=mock` en el archivo `.env`. Esto permite testear todo el pipeline de renderizado (MoviePy, subtítulos, audio) en segundos y sin consumir créditos de APIs externas (como Kling).
 
 ## 🧠 La Receta Viral (El "Efecto Adictivo")
 El sistema no genera videos genéricos; está programado a nivel de código para maximizar la retención del usuario (watch-time) y forzar la interacción:
