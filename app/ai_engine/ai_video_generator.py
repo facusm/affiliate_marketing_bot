@@ -43,6 +43,7 @@ class VideoProvider(str, Enum):
     KLING = "kling"
     LUMA = "luma"
     REPLICATE = "replicate"
+    MOCK = "mock"
 
 
 # ─── Interfaz Unificada ──────────────────────────────────────────────────────
@@ -89,6 +90,8 @@ async def generate_ai_video(
         return await _generate_luma(prompt, video_id, clip_index, image_url, aspect_ratio, duration)
     elif resolved_provider == VideoProvider.REPLICATE:
         return await _generate_replicate(prompt, video_id, clip_index, image_url, aspect_ratio, duration)
+    elif resolved_provider == VideoProvider.MOCK:
+        return await _generate_mock(prompt, video_id, clip_index, image_url, aspect_ratio, duration)
     else:
         raise ValueError(f"Provider de video IA no soportado: {resolved_provider}")
 
@@ -497,17 +500,28 @@ async def _generate_kling(
         logger.info(f"[Kling] Usando text-to-video (sin imagen de referencia) (Modelo V1.6)")
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            endpoint,
-            json=payload,
-            headers=headers,
-            timeout=30.0,
-        )
-        try:
-            response.raise_for_status()
-        except Exception as e:
-            logger.error(f"[Kling] Error de la API: {response.text}")
-            raise
+        max_retries = 5
+        for attempt in range(max_retries):
+            response = await client.post(
+                endpoint,
+                json=payload,
+                headers=headers,
+                timeout=30.0,
+            )
+            
+            if response.status_code == 429 and attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s
+                logger.warning(f"[Kling] 429 Too Many Requests. Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+                continue
+                
+            try:
+                response.raise_for_status()
+            except Exception as e:
+                logger.error(f"[Kling] Error de la API: {response.text}")
+                raise
+            break
+
         data = response.json()
         task_id = data.get("data", {}).get("task_id")
 
@@ -641,3 +655,44 @@ async def _generate_replicate(
             failure_values=["failed", "canceled"],
             video_url_field="output",
         )
+
+
+# ─── Mock Provider (Para Pruebas) ─────────────────────────────────────────────
+
+async def _generate_mock(
+    prompt: str, video_id: int, clip_index: int,
+    image_url: str | None, aspect_ratio: str, duration: float,
+) -> str:
+    """
+    Genera un video falso (color sólido) usando MoviePy sin gastar créditos.
+    Útil para pruebas locales del pipeline y post-producción.
+    """
+    output_path = _get_output_path(video_id, clip_index)
+    logger.info(f"[Mock] Simulando generación de video... (clip {clip_index})")
+    
+    # Espera simulada
+    await asyncio.sleep(2)
+    
+    width, height = 1080, 1920
+    if aspect_ratio == "16:9":
+        width, height = 1920, 1080
+        
+    # Colores distintos para diferenciar clips (RGB)
+    colors = [(255, 100, 100), (100, 255, 100), (100, 100, 255)]
+    color = colors[clip_index % len(colors)]
+    
+    def _write_mock_video():
+        from moviepy import ColorClip
+        clip = ColorClip(size=(width, height), color=color, duration=duration)
+        clip.write_videofile(
+            output_path,
+            fps=24,
+            codec="libx264",
+            audio=False,
+            logger=None,
+        )
+        clip.close()
+        
+    await asyncio.to_thread(_write_mock_video)
+    logger.info(f"[Mock] Video falso generado exitosamente: {output_path}")
+    return output_path

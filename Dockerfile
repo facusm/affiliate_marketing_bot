@@ -5,7 +5,13 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     libsm6 \
     libxext6 \
+    imagemagick \
+    fonts-liberation \
+    fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
+
+# Fix ImageMagick security policy for MoviePy to allow TextClip
+RUN sed -i '/<policy domain="path" rights="none" pattern="@\*"/d' /etc/ImageMagick-*/policy.xml || true
 
 WORKDIR /app
 

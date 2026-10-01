@@ -6,6 +6,7 @@ compartidos entre Pipeline A (Pexels) y Pipeline B (AI Video).
 """
 
 import os
+import re
 import logging
 from moviepy import (
     VideoFileClip,
@@ -20,8 +21,15 @@ from moviepy import (
 logger = logging.getLogger(__name__)
 
 # Fuentes con fallback (Montserrat Black > Impact > Arial-Bold)
-FONT_PRIORITY = ["Montserrat-Black", "Montserrat-Bold", "Impact", "Arial-Bold", "Arial"]
-
+FONT_PRIORITY = [
+    "Montserrat-Black", 
+    "Montserrat-Bold", 
+    "Impact", 
+    "Arial-Bold", 
+    "Arial",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+]
 
 def _resolve_font(preferred: str | None = None) -> str:
     """
@@ -41,8 +49,17 @@ def _resolve_font(preferred: str | None = None) -> str:
         except Exception:
             continue
 
-    # Fallback absoluto
-    return "Arial"
+    # Fallback absoluto a una fuente garantizada en el contenedor
+    return "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
+def sanitize_text_for_moviepy(text: str) -> str:
+    """
+    Elimina emojis y símbolos no soportados. 
+    Conserva letras (incluidas tildes, diéresis, ñ), números y puntuación básica.
+    """
+    # \w incluye todos los caracteres de palabras Unicode (á, ñ, ç, ä, etc.)
+    return re.sub(r'[^\w\s.,!?"\'¡¿\-]', '', text)
 
 
 def apply_dark_overlay(
@@ -98,6 +115,7 @@ def create_hook_text(
         TextClip posicionado en el tercio superior.
     """
     resolved_font = _resolve_font(font)
+    text = sanitize_text_for_moviepy(text) + "\n "
 
     txt_clip = TextClip(
         text=text,
@@ -170,6 +188,7 @@ def create_subtitle_clips(
 
     for group in groups:
         group_text = " ".join(w["word"] for w in group)
+        group_text = sanitize_text_for_moviepy(group_text) + "\n "
         group_start = group[0]["start"]
         group_end = group[-1]["end"]
         group_duration = max(group_end - group_start, 0.1)

@@ -1,4 +1,5 @@
 import os
+import re
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
@@ -49,6 +50,36 @@ class MultiLangScriptResponse(BaseModel):
     scripts: list[LangScript] = Field(description="Lista de guiones, uno por cada idioma solicitado.")
 
 
+# ─── Funciones Auxiliares ─────────────────────────────────────────────────────
+
+def truncate_script_if_needed(hook: str, body: str, max_words: int = 35) -> str:
+    """
+    Asegura que el guion (hook + body) no exceda las max_words.
+    Si se excede, recorta el body hasta el punto final válido más cercano.
+    """
+    total_text = f"{hook} {body}"
+    words = total_text.split()
+    if len(words) <= max_words:
+        return body
+        
+    hook_words_count = len(hook.split())
+    allowed_body_words = max_words - hook_words_count
+    
+    if allowed_body_words <= 0:
+        return ""
+        
+    body_words = body.split()
+    truncated_body = " ".join(body_words[:allowed_body_words])
+    
+    # Buscar el último signo de puntuación válido para cortar ahí
+    match = list(re.finditer(r'[.!?]', truncated_body))
+    if match:
+        last_punct_idx = match[-1].end()
+        return truncated_body[:last_punct_idx]
+        
+    return truncated_body + "..."
+
+
 # ─── Función Original (Pipeline A y retrocompatibilidad) ──────────────────────
 
 async def generate_video_script(
@@ -76,7 +107,7 @@ async def generate_video_script(
     4. Keywords Visuales: Genera palabras clave SIEMPRE EN INGLÉS que describan visualmente el problema o la solución. Se usarán para buscar clips de stock de fondo (ej: 'person tired cleaning', 'satisfying slicing').
     
     MUY IMPORTANTE: 
-    - CRITICAL: The final script MUST be under 30 words in total. It must result in less than 12 seconds of spoken audio. Do not write polite intros, jump directly into the aggressive hook.
+    - CRITICAL: The script MUST NOT exceed 30 words in total. Count the words before outputting. It must result in less than 12 seconds of spoken audio. Do not write polite intros, jump directly into the aggressive hook.
     - NO uses emojis en los campos de texto, ya que este guion será leído por una IA de Text-To-Speech (ElevenLabs).
     - La palabra clave del CTA debe ser UNA SOLA PALABRA, corta, directa y en mayúsculas.
     - EL CONTENIDO DEBE ESTAR TRADUCIDO Y ADAPTADO CULTURALMENTE AL IDIOMA: {language}.
@@ -108,7 +139,9 @@ async def generate_video_script(
         response_format=VideoScriptResponse
     )
 
-    return response.choices[0].message.parsed
+    script = response.choices[0].message.parsed
+    script.body = truncate_script_if_needed(script.hook, script.body, max_words=35)
+    return script
 
 
 # ─── Función Multi-Idioma (Pipeline B) ────────────────────────────────────────
@@ -159,7 +192,7 @@ SPANISH REGIONAL VARIANTS — FOLLOW STRICTLY:
 - "es_latam" = Argentine Rioplatense Spanish. It is MANDATORY to use voseo throughout ("vos tenés", "vos sabés", "comentá", "mirá"). Use natural Argentine modismos ("re copado", "bárbaro", "posta", "mortal"). Orient the copy to an Argentine audience that buys products with international shipping. The CTA MUST use the voseo imperative ("Comentá", "Escribí").
 
 CRITICAL RULES:
-- CRITICAL: The final script MUST be under 30 words in total. It must result in less than 12 seconds of spoken audio. Do not write polite intros, jump directly into the aggressive hook.
+- CRITICAL: The script MUST NOT exceed 30 words in total. Count the words before outputting. It must result in less than 12 seconds of spoken audio. Do not write polite intros, jump directly into the aggressive hook.
 - REGLA ESTRICTA: NUNCA menciones el precio ni el valor monetario del producto en el guion. Tu objetivo es generar curiosidad destacando el dolor que resuelve y sus beneficios. El CTA debe invitar a comentar la palabra clave única generada para este producto (cta_keyword) para recibir el enlace.
 - NO emojis in text fields (this will be read by ElevenLabs TTS).
 - The cta_keyword MUST be in the NATIVE LANGUAGE of each script and in UPPERCASE. It should be a short, product-related word that feels natural to comment in that language (e.g., Spanish: OFERTA, English: OFFER, German: ANGEBOT, Portuguese: OFERTA, French: OFFRE, Italian: OFFERTA). Each language gets its OWN keyword.
@@ -200,4 +233,7 @@ Each script must feel naturally written by a native speaker of that language."""
     )
 
     result = response.choices[0].message.parsed
+    for script in result.scripts:
+        script.body = truncate_script_if_needed(script.hook, script.body, max_words=35)
+        
     return result.scripts

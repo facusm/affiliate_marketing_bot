@@ -17,6 +17,7 @@ La arquitectura híbrida evita:
 import os
 import asyncio
 import logging
+import traceback
 from moviepy import (
     VideoFileClip,
     AudioFileClip,
@@ -190,8 +191,11 @@ def _render_viral_sync(
     overlay_layers = [base_video]
 
     # ── Capa 1: Dark Overlay (tinte oscuro sutil) ─────────────────────────────
-    dark_layer = apply_dark_overlay(base_video, opacity=dark_overlay_opacity)
-    overlay_layers.append(dark_layer)
+    try:
+        dark_layer = apply_dark_overlay(base_video, opacity=dark_overlay_opacity)
+        overlay_layers.append(dark_layer)
+    except Exception as e:
+        logger.error(f"[Viral Render] Error en Dark Overlay:\n{traceback.format_exc()}")
 
     # ── Capa 2: Hook/CTA Text Fijo (tercio superior) ─────────────────────────
     # Formatear el texto del hook con la keyword si existe
@@ -213,7 +217,7 @@ def _render_viral_sync(
         )
         overlay_layers.append(hook_clip)
     except Exception as e:
-        logger.warning(f"[Viral Render] Error creando hook text: {e}. Continuando sin hook.")
+        logger.error(f"[Viral Render] Error creando hook text:\n{traceback.format_exc()}")
 
     # ── Capa 3: Subtítulos Dinámicos Estilo Hormozi (centro) ──────────────────
     if word_timestamps:
@@ -234,7 +238,7 @@ def _render_viral_sync(
                 f"[Viral Render] {len(subtitle_layer)} grupos de subtítulos creados"
             )
         except Exception as e:
-            logger.warning(f"[Viral Render] Error creando subtítulos: {e}. Continuando sin subtítulos.")
+            logger.error(f"[Viral Render] Error creando subtítulos:\n{traceback.format_exc()}")
     else:
         logger.info("[Viral Render] No hay timestamps de audio. Saltando subtítulos dinámicos.")
 
