@@ -3,6 +3,9 @@
 ## 🎯 Objetivo Principal
 Un sistema automatizado que transforma la foto y los datos de un producto (ingresados mediante un panel web fácil de usar) en **8 Reels virales en distintos idiomas** (incluyendo 3 variantes regionales de español). El bot publica los videos automáticamente usando la Meta Graph API y usa un Webhook oficial de Instagram para **enviar mensajes directos (DMs) automáticos** con un link de afiliado a los usuarios que comentan una palabra clave específica.
 
+## 🏗️ Arquitectura y Tecnologías
+Este proyecto es un pipeline end-to-end asíncrono construido con FastAPI, base de datos PostgreSQL, interfaz gráfica con Streamlit, e integración con LLMs (OpenAI), ElevenLabs (TTS) y MoviePy para el renderizado. Todo el entorno está 100% contenerizado en Docker, resolviendo dependencias complejas de sistema (ImageMagick).
+
 ## 🧠 La Receta Viral (El "Efecto Adictivo")
 El sistema no genera videos genéricos; está programado a nivel de código para maximizar la retención del usuario (watch-time) y forzar la interacción:
 1. **Arquitectura Híbrida I2V + T2V (Kling v3.0)**: En lugar de repetir un solo clip en loop, el sistema genera **3 clips distintos en paralelo**: un Hero Shot estático del producto (Image-to-Video) + 2 B-Rolls dinámicos generados por Text-to-Video (escena sensorial + producto en uso en macro). Esto elimina el aburrimiento visual por repetición. Además, el usuario recorta manualmente la imagen a **9:16 en el frontend** con `streamlit-cropper`, y el backend solo fuerza el redimensionado a 1080x1920 para garantizar la resolución exigida por Kling sin distorsiones automáticas erróneas.
@@ -65,3 +68,8 @@ El orquestador de IA cuenta con validaciones estrictas antes de gastar saldo en 
 ## 🧹 Sistema de Almacenamiento y Limpieza (Deep Delete)
 - **Agrupación Física**: Todo el contenido generado (imágenes, audios TTS, clips crudos Kling y videos virales finales) se guarda y aísla en subcarpetas nombradas con el `ID` único del producto dentro de la carpeta `storage/`.
 - **Eliminación Profunda (Deep Delete)**: Si eliminas un producto desde la interfaz de usuario, el sistema no solo lo remueve de la base de datos (y elimina todos sus videos asociados en cascada), sino que **borra físicamente** todos los archivos locales que ese producto haya generado (imágenes, audios y videos), previniendo fugas de memoria o acumulación de archivos huérfanos a largo plazo.
+
+## 🗺️ Roadmap / Próximos Pasos
+- [ ] Integración de Webhooks con Meta Graph API para la escucha activa de comentarios en cuentas de Instagram (_es, _en, _pt, etc).
+- [ ] Despliegue de la arquitectura contenerizada en DigitalOcean (VPS) con túneles HTTPS seguros para la recepción de eventos.
+- [ ] Implementación de tareas programadas (CRON) para la ejecución autónoma del pipeline de generación de contenido.
