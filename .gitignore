@@ -6,6 +6,7 @@ env/
 # Variables de entorno (¡CLAVES SECRETAS!)
 .env
 .env.*
+!.env.example
 
 # Python
 __pycache__/
